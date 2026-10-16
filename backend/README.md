@@ -165,38 +165,49 @@ http://localhost:8080/images/nom-du-fichier.png
 
 ### Création du schéma
 
-Le script [schema.sql](schema.sql) est un export `mysqldump --no-data` de la
-structure locale, sans données. Il crée les tables `USERS`, `RENTALS` et
-`MESSAGES`, leurs clés étrangères et l’index unique des emails. Les colonnes
-`surface` et `price` sont directement définies en `DECIMAL(12,2)`.
-Le SQL reproduit la structure des tables métier de la base locale : dates en
-`TIMESTAMP`, colonnes nullables selon le schéma existant et présence de
-`MESSAGES.updated_at`. Le moteur est InnoDB, avec le jeu de caractères
-`utf8mb4` et la collation `utf8mb4_0900_ai_ci`.
-Les validations des DTO imposent les champs obligatoires des requêtes API.
-Les dates sont renseignées par le backend lors de l’enregistrement.
-La colonne historique `MESSAGES.updated_at` n’est pas utilisée par le backend.
+Le script [schema.sql](schema.sql) crée les tables `USERS`, `RENTALS` et
+`MESSAGES`, leurs clés étrangères et l’index unique des emails, dans la base
+sélectionnée par la connexion. Les colonnes `surface` et `price` utilisent
+`DECIMAL(12,2)`. Il ne contient ni nom de base imposé ni suppression de table.
 
-Flyway et son ancienne table technique `flyway_schema_history` ont été retirés.
-La base locale contient uniquement les trois tables métier définies par ce script.
+Docker Compose crée la base et l’utilisateur définis par `MYSQL_DATABASE` et
+`MYSQL_USER`, puis exécute le SQL sur cette base uniquement sur un volume vide.
+Hibernate conserve `ddl-auto=none` ; un volume existant n’est pas modifié.
 
-Docker Compose monte ce fichier dans le répertoire d’initialisation MySQL.
-Il est exécuté uniquement lors de la création d’une base sur un volume vide.
-Pour une installation MySQL hors Docker, exécuter ce SQL dans la base configurée
-avant de lancer le backend. Hibernate conserve `ddl-auto=none` ; aucun outil de
-migration n’est utilisé.
+Pour créer la base sans Docker, se connecter avec un compte MySQL autorisé à
+créer une base, puis exécuter ceci en adaptant son nom :
 
-Docker n’exécute pas ce script sur un volume déjà initialisé. L’export contient
-des instructions `DROP TABLE IF EXISTS` : ne pas le réimporter dans une base
-contenant des données à conserver, car il supprimerait les tables concernées.
-La base locale
-possède déjà les colonnes décimales attendues. Toute autre base existante doit
-être adaptée explicitement avant utilisation.
+```sql
+CREATE DATABASE chatop CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+USE chatop;
+SOURCE backend/schema.sql;
+```
 
-Les tests HTTP utilisent un schéma H2 isolé généré à partir des entités ; ils ne
-valident pas à eux seuls le script de création MySQL.
-Le script a également été exécuté dans une base MySQL temporaire : les trois
-tables et les types décimaux ont été vérifiés, puis cette base a été supprimée.
+La commande `SOURCE` est à lancer depuis le client MySQL ouvert à la racine du
+projet. Le compte applicatif doit disposer des droits sur la base sélectionnée.
+Le nom renseigné dans `MYSQL_DATABASE` doit être le même. Ne pas réexécuter le
+script sur une base contenant déjà ces tables : les `CREATE TABLE` échoueraient.
+
+### Vérifier le SQL sur MySQL
+
+Le test `MySqlSchemaTests` vérifie le script, les clés et les décimales dans deux
+bases aux noms distincts, créées puis supprimées par le test. Il est désactivé
+sans `MYSQL_TEST_URL`. Utiliser uniquement un serveur MySQL 8.4 réservé aux tests,
+avec un compte autorisé à créer et supprimer ses bases temporaires :
+
+```bash
+export MYSQL_TEST_URL='jdbc:mysql://127.0.0.1:3307/mysql?sslMode=DISABLED&allowPublicKeyRetrieval=true'
+export MYSQL_TEST_USER=root
+read -rsp 'Mot de passe MySQL de test : ' MYSQL_TEST_PASSWORD
+export MYSQL_TEST_PASSWORD
+cd backend
+./mvnw -Dtest=MySqlSchemaTests test
+unset MYSQL_TEST_URL MYSQL_TEST_USER MYSQL_TEST_PASSWORD
+```
+
+Ces variables concernent uniquement ce test JDBC ; les tests HTTP ordinaires
+continuent d’utiliser leur H2 isolée. Ne pas utiliser la base locale de travail
+pour ces vérifications.
 
 ## Mockoon avec Docker
 

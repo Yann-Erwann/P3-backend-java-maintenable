@@ -33,6 +33,7 @@ import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.*;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 
 import com.chatop.backend.repository.UserRepository;
 import com.chatop.backend.repository.RentalRepository;
@@ -47,6 +48,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@ActiveProfiles("test")
 class BackendApplicationTests {
     private static final String PASSWORD = "Registration-test!42";
     private static final Path UPLOADS = temporaryImages();
