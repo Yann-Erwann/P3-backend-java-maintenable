@@ -278,9 +278,27 @@ n’utilisent pas les données MySQL locales. Deux tests supplémentaires valide
 les exemples Swagger contre les DTO. Les identifiants JSON fractionnaires sont
 refusés avec HTTP 400 avant toute écriture.
 
-Le test de schéma MySQL est désactivé sans configuration explicite. Sa procédure
-est décrite ci-dessous ; il contrôle aussi les contraintes obligatoires des
-entités JPA. Les avertissements SQL des tests de doublon et de rollback sont
+Les tests JPA sur MySQL 8.4 sont exécutés à la phase Maven `verify`, après les
+tests H2 rapides de la phase `test`. Testcontainers démarre un MySQL temporaire
+initialisé avec `schema.sql` ; Hibernate vérifie les mappings avec
+`ddl-auto=validate`. Depuis `backend/`, avec Docker démarré et accessible au
+compte qui lance Maven :
+
+```bash
+./mvnw -B verify
+```
+
+La classe `MySqlJpaIT` vérifie la persistance et la mise à jour des entités, les
+décimales et dates, l’unicité des emails avec la collation MySQL, les trois clés
+étrangères, les suppressions interdites et les rollbacks après écriture. Elle
+vérifie aussi qu’une création de location échouée retire son image temporaire.
+Elle contrôle la base sélectionnée, les trois tables, la précision des décimales
+et les contraintes `NOT NULL` attendues par les entités JPA.
+Le conteneur de test est arrêté automatiquement avec son contexte Spring et
+n’utilise aucun volume Compose existant. Ces tests échouent si Docker est
+indisponible ; `./mvnw test` conserve les vérifications rapides sans Docker.
+
+Les avertissements SQL des tests de doublon et de rollback sont
 attendus et ne représentent pas un échec de la suite.
 
 | Problème | Vérification |
@@ -297,16 +315,17 @@ Le workflow [Backend CI](../.github/workflows/backend.yml) exécute `./mvnw -B v
 dans `backend/` à chaque push sur une branche et pour les pull requests. Il
 installe Java 25 avec `actions/setup-java` et met en cache les dépendances Maven.
 Une erreur de compilation ou un échec de test fait échouer le job **Maven
-verification**. Les tests utilisent H2 ; le test MySQL optionnel conserve sa
-configuration explicite décrite ci-dessous.
+verification**. Les tests H2 sont suivis des tests JPA avec MySQL 8.4 dans
+Testcontainers ; le runner GitHub fournit Docker.
 
 ## Construire le JAR et publier une release
 
 Le workflow [Backend JAR](../.github/workflows/backend-release.yml) installe
 Java 25, puis exécute `./mvnw -B -ntp clean verify` dans `backend/`. Il lance les
-tests HTTP sur H2 et les tests de documentation Swagger, puis construit le JAR
-exécutable avec ses dépendances. Le test MySQL optionnel reste désactivé : aucun
-accès à une base locale ni aucun secret applicatif ne sont nécessaires.
+tests HTTP sur H2, les tests de documentation Swagger et les tests JPA sur
+MySQL 8.4 avec Testcontainers, puis conserve le JAR exécutable avec ses
+dépendances. Aucun accès à une base locale ni aucun secret applicatif ne sont
+nécessaires ; la base MySQL de test est créée automatiquement par Docker.
 
 Après avoir commité et poussé le workflow sur `main`, créer et pousser un nouveau
 tag sur le commit à livrer, par exemple depuis la racine :
@@ -345,7 +364,7 @@ configuration décrites plus haut pour exécuter le backend.
 Références : [déclenchement des workflows GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
 et [création d’une release avec GitHub CLI](https://cli.github.com/manual/gh_release_create).
 
-## Maintenance d’une base existante et tests MySQL
+## Maintenance d’une base existante
 
 ### Aligner une ancienne base sans effacer les données
 
@@ -403,25 +422,3 @@ Ces deux `ALTER TABLE` ne suppriment ni les lignes ni les clés étrangères.
 MySQL valide chaque DDL séparément : ne pas compter sur `ROLLBACK` pour les annuler.
 Comparer les définitions avec le schéma de référence, puis quitter le client et
 relancer le backend avec la commande Compose `start backend`.
-
-### Vérifier le SQL sur MySQL
-
-Le test `MySqlSchemaTests` vérifie le script, les clés et les décimales dans deux
-bases aux noms distincts, créées puis supprimées par le test. Il est désactivé
-sans `MYSQL_TEST_URL`. Utiliser uniquement un serveur MySQL 8.4 réservé aux tests,
-avec un compte autorisé à créer et supprimer ses bases temporaires. Depuis un
-terminal Bash ouvert à la racine du dépôt :
-
-```bash
-export MYSQL_TEST_URL='jdbc:mysql://127.0.0.1:3307/mysql?sslMode=DISABLED&allowPublicKeyRetrieval=true'
-export MYSQL_TEST_USER=root
-read -rsp 'Mot de passe MySQL de test : ' MYSQL_TEST_PASSWORD
-export MYSQL_TEST_PASSWORD
-cd backend
-./mvnw -Dtest=MySqlSchemaTests test
-unset MYSQL_TEST_URL MYSQL_TEST_USER MYSQL_TEST_PASSWORD
-```
-
-Ces variables concernent uniquement ce test JDBC ; les tests HTTP ordinaires
-continuent d’utiliser leur H2 isolée. Ne pas utiliser la base locale de travail
-pour ces vérifications.
