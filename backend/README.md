@@ -15,7 +15,7 @@ projet**, le dossier contenant `backend/`, `frontend/` et `docker/`.
 - Git.
 - Docker Engine ou Docker Desktop, démarré, avec Docker Compose v2 ou supérieur.
 - OpenSSL pour générer la clé JWT.
-- Java 25 uniquement pour lancer le backend hors Docker ; Maven est fourni par
+- Java 25 uniquement pour lancer le backend hors Docker. Maven est fourni par
   le wrapper `backend/mvnw`. Docker fournit Java et Node.js pour le lancement complet.
 
 Vérifier Docker et Compose :
@@ -48,8 +48,8 @@ spéciaux, afin de pouvoir charger ce fichier aussi dans Bash.
 
 | Variable | Valeur par défaut / configuration attendue |
 | --- | --- |
-| `MYSQL_HOST` | `127.0.0.1` pour Java sur l’hôte ; Compose utilise automatiquement `mysql` pour le backend conteneurisé. |
-| `MYSQL_PORT` | `3306`, port MySQL exposé sur l’hôte ; choisir un autre port s’il est occupé. |
+| `MYSQL_HOST` | `127.0.0.1` pour Java sur l’hôte. Compose utilise automatiquement `mysql` pour le backend conteneurisé. |
+| `MYSQL_PORT` | `3306`, port MySQL exposé sur l’hôte. Choisir un autre port s’il est occupé. |
 | `MYSQL_DATABASE` | `chatop`, nom de la base créée au premier démarrage. |
 | `MYSQL_USER` | `chatop`, compte applicatif créé au premier démarrage. |
 | `MYSQL_PASSWORD` | Remplacer la valeur d’exemple par le mot de passe du compte applicatif. |
@@ -57,7 +57,7 @@ spéciaux, afin de pouvoir charger ce fichier aussi dans Bash.
 | `JWT_SECRET` | Renseigner la clé générée ci-dessous. |
 | `JWT_TTL` | `PT1H`, durée de validité des jetons JWT : une heure. |
 | `API_MODE` | Mettre `backend` pour utiliser l’API réelle depuis le frontend. |
-| `UPLOAD_DIR` | `./uploads` pour Java sur l’hôte ; Compose utilise `/app/uploads`. |
+| `UPLOAD_DIR` | `./uploads` pour Java sur l’hôte. Compose utilise `/app/uploads`. |
 
 Générer une clé aléatoire de 32 octets encodée en Base64 :
 
@@ -85,30 +85,29 @@ sélectionnée par la connexion. Les colonnes `surface` et `price` utilisent
 
 Docker Compose crée la base et l’utilisateur définis par `MYSQL_DATABASE` et
 `MYSQL_USER`, puis exécute le SQL sur cette base uniquement sur un volume vide.
-Hibernate conserve `ddl-auto=none` ; un volume existant n’est pas modifié.
+Hibernate conserve `ddl-auto=none`. Un volume existant n’est pas modifié.
 
 Pour créer la base sans Docker, utiliser un serveur MySQL 8.4 installé et démarré.
-Se connecter avec un compte administrateur autorisé à créer une base, puis
-exécuter ceci en adaptant son nom :
+Depuis la racine du projet, exécuter les commandes suivantes en adaptant le nom
+de la base et le compte administrateur autorisé à la créer :
 
-```sql
-CREATE DATABASE chatop CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-USE chatop;
-SOURCE backend/schema.sql;
+```bash
+mysql --user=root --password --execute='CREATE DATABASE chatop CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci'
+mysql --user=root --password --database=chatop < backend/schema.sql
 ```
 
-La commande `SOURCE` est à lancer depuis le client MySQL ouvert à la racine du
-projet. Le compte applicatif doit disposer des droits sur la base sélectionnée.
+Chaque commande demande le mot de passe du compte administrateur. Le compte
+applicatif doit disposer des droits sur la base sélectionnée.
 Le nom renseigné dans `MYSQL_DATABASE` doit être le même. Pour un serveur MySQL
 sur l’hôte, créer si nécessaire le compte applicatif avec les droits de lecture
 et d’écriture sur cette base, puis reporter ses identifiants dans `.env`. Les
-créations de tables se font avec le compte administrateur ; le backend n’a pas
+créations de tables se font avec le compte administrateur. Le backend n’a pas
 besoin de droits de création de tables.
 
 Ne pas réexécuter le script sur une base contenant déjà ces tables : les
 `CREATE TABLE` échoueraient. Aucune table n’est supprimée ou remplacée par ce SQL.
-Pour une base existante issue d’une ancienne version, suivre la procédure de
-maintenance ci-dessous plutôt que réimporter le schéma.
+Pour une base existante issue d’une ancienne version, sauvegarder les données
+puis préparer une migration adaptée aux différences avec `schema.sql`.
 
 ## Lancer le projet avec Docker
 
@@ -141,7 +140,7 @@ au moins 8 caractères et au plus 72 octets UTF-8.
 Pour contrôler les tables depuis le conteneur MySQL :
 
 ```bash
-docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u "$MYSQL_USER" "$MYSQL_DATABASE" -e "SHOW TABLES;"'
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u "$MYSQL_USER" "$MYSQL_DATABASE" -e "SHOW TABLES"'
 ```
 
 Le résultat doit contenir `USERS`, `RENTALS` et `MESSAGES`.
@@ -174,7 +173,7 @@ par un conteneur dédié qui charge [swagger.yml](swagger.yml).
    uniquement le jeton, sans le préfixe `Bearer`.
 4. Tester par exemple `GET /auth/me` ou `GET /rentals`.
 
-L’inscription et la connexion sont publiques ; les autres routes métier
+L’inscription et la connexion sont publiques. Les autres routes métier
 nécessitent un JWT valide. Le contrat décrit les neuf opérations métier :
 authentification, profils, consultation et écriture des locations, et envoi de messages.
 
@@ -183,7 +182,7 @@ identifiants de démonstration puis son jeton fictif `jwt`. Ce jeton est refusé
 par le backend réel.
 
 Avec VS Code Remote SSH, transférer les ports **4200**, **8080** et **8081** vers
-la machine locale ; ajouter **3001** pour le mock et **3306** (ou `MYSQL_PORT`)
+la machine locale. Ajouter **3001** pour le mock et **3306** (ou `MYSQL_PORT`)
 pour un client MySQL local. Le navigateur doit pouvoir joindre l’API sélectionnée.
 
 ## Lancer le backend Java sur l’hôte
@@ -225,12 +224,12 @@ au plus 4096 pixels par dimension. Le backend les réencode en PNG. Spring Boot
 sert directement les fichiers de `UPLOAD_DIR` sous `/images/{filename}`, comme
 ressources statiques publiques pour l’affichage dans Angular. Ce dossier est
 réservé aux photos générées par l’application. Les lectures GET et HEAD depuis
-les origines locales Swagger et Angular sont autorisées par CORS ; les origines
+les origines locales Swagger et Angular sont autorisées par CORS. Les origines
 non configurées et les prévols d’écriture sont refusés.
 
 Il n’y a pas de contrôleur REST ni d’opération Swagger dédiée aux images : le
 contrat conserve les neuf opérations métier. Le chemin statique et son dossier
-source sont configurés dans `application.properties` ; les photos conservent
+source sont configurés dans `application.properties`. Les photos conservent
 leur URL, un cache public d’un jour et la protection `nosniff`.
 
 Les données MySQL sont conservées dans le volume `mysql_data`, et les images
@@ -300,7 +299,7 @@ Pour lancer une seule fonctionnalité, par exemple l’authentification :
 
 Les tests JPA sur MySQL 8.4 sont exécutés à la phase Maven `verify`, après les
 tests H2 rapides de la phase `test`. Testcontainers démarre un MySQL temporaire
-initialisé avec `schema.sql` ; Hibernate vérifie les mappings avec
+initialisé avec `schema.sql`. Hibernate vérifie les mappings avec
 `ddl-auto=validate`. Depuis `backend/`, avec Docker démarré et accessible au
 compte qui lance Maven :
 
@@ -316,7 +315,7 @@ Elle contrôle la base sélectionnée, les trois tables, la précision des déci
 et les contraintes `NOT NULL` attendues par les entités JPA.
 Le conteneur de test est arrêté automatiquement avec son contexte Spring et
 n’utilise aucun volume Compose existant. Ces tests échouent si Docker est
-indisponible ; `./mvnw test` conserve les vérifications rapides sans Docker.
+indisponible. `./mvnw test` conserve les vérifications rapides sans Docker.
 
 Les avertissements SQL des tests de doublon et de rollback sont
 attendus et ne représentent pas un échec de la suite.
@@ -325,7 +324,7 @@ attendus et ne représentent pas un échec de la suite.
 | --- | --- |
 | Erreur d’accès au socket Docker | Préfixer les commandes Docker par `sudo`. |
 | Port MySQL occupé | Modifier `MYSQL_PORT` dans `.env`, puis relancer Compose avec `up -d`. |
-| `Access denied` MySQL | Vérifier les identifiants de la base existante ; changer `.env` ne réinitialise pas ses comptes. |
+| `Access denied` MySQL | Vérifier les identifiants de la base existante. Changer `.env` ne réinitialise pas ses comptes. |
 | Swagger affiche `Failed to fetch` | Vérifier l’adresse du serveur sélectionné, le démarrage du backend et les ports transférés en SSH. |
 | Réponse 401 sur une route protégée | Se connecter au serveur sélectionné et renseigner son jeton dans **Authorize**. |
 
@@ -338,7 +337,7 @@ pour les pull requests et lors du push d’un tag commençant par `v`. Il peut a
 cache les dépendances Maven. Une erreur de compilation ou un échec de test fait
 échouer le job **Maven verification**. Les tests HTTP sur H2 et les tests de
 documentation Swagger sont suivis des tests JPA avec MySQL 8.4 dans
-Testcontainers ; le runner GitHub fournit Docker. Aucun accès à une base locale
+Testcontainers. Le runner GitHub fournit Docker. Aucun accès à une base locale
 ni aucun secret applicatif ne sont nécessaires.
 
 Une nouvelle exécution automatique sur la même branche ou PR annule la précédente
@@ -369,17 +368,17 @@ git push origin v1.0.0
 Chaque tag commençant par `v` déclenche la compilation. Si les tests et la
 construction réussissent, le workflow crée la release du même nom avec des notes
 générées automatiquement et y joint le JAR de `backend/target/`. Utiliser un
-nouveau tag pour chaque version ; le workflow ne remplace pas une release
+nouveau tag pour chaque version. Le workflow ne remplace pas une release
 existante. Le fichier `.jar.original` n’est pas publié.
 
 Pour obtenir uniquement un JAR sans publier de release, ouvrir **Actions >
 Backend CI > Run workflow**, choisir la branche puis lancer le workflow.
 Télécharger ensuite `backend-jar` dans les **Artifacts** de l’exécution réussie.
-Cet artefact est conservé sept jours ; le JAR joint à une release n’est pas
+Cet artefact est conservé sept jours. Le JAR joint à une release n’est pas
 soumis à cette durée.
 
 La publication utilise le `GITHUB_TOKEN` fourni automatiquement par GitHub.
-Seul le job de publication reçoit `contents: write` ; le job de compilation
+Seul le job de publication reçoit `contents: write`. Le job de compilation
 conserve un accès en lecture. Aucun token personnel n’est à configurer.
 
 Pour reproduire la construction localement, depuis `backend/` :
@@ -393,62 +392,3 @@ configuration décrites plus haut pour exécuter le backend.
 
 Références : [déclenchement des workflows GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
 et [création d’une release avec GitHub CLI](https://cli.github.com/manual/gh_release_create).
-
-## Maintenance d’une base existante
-
-### Aligner une ancienne base sans effacer les données
-
-Le schéma de référence est `schema.sql`. Une base initialisée avec l’ancien SQL
-peut encore accepter `NULL` dans des champs obligatoires des tables `USERS` et
-`MESSAGES`. La création du schéma n’est pas rejouée sur un volume existant.
-
-Avant toute modification, arrêter les écritures applicatives et sauvegarder la
-base. Depuis la racine, avec Bash et le backend arrêté pendant l’intervention :
-
-```bash
-sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml stop backend
-mkdir -p backend/backups
-umask 077
-sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump --single-transaction --no-tablespaces --set-gtid-purged=OFF -u "$MYSQL_USER" --databases "$MYSQL_DATABASE"' > backend/backups/before-constraints.sql
-sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql -u "$MYSQL_USER" "$MYSQL_DATABASE"'
-```
-
-Vérifier que la sauvegarde est non vide avant de continuer. `backend/backups/`
-est ignoré par Git ; ses fichiers contiennent les données de la base.
-Dans le client MySQL, ces deux compteurs doivent être à zéro :
-
-```sql
-SELECT COUNT(*) AS incomplete_users FROM USERS
-WHERE email IS NULL OR name IS NULL OR password IS NULL
-   OR created_at IS NULL OR updated_at IS NULL;
-SELECT COUNT(*) AS incomplete_messages FROM MESSAGES
-WHERE rental_id IS NULL OR user_id IS NULL OR message IS NULL OR created_at IS NULL;
-```
-
-Si un compteur est non nul, corriger les lignes avec des valeurs justifiées avant
-de poursuivre ; ne pas supprimer ni inventer des données pour passer le contrôle.
-Sinon, appliquer les mêmes contraintes que pour une nouvelle installation :
-
-```sql
-ALTER TABLE `USERS`
-  MODIFY `email` VARCHAR(255) NOT NULL,
-  MODIFY `name` VARCHAR(255) NOT NULL,
-  MODIFY `password` VARCHAR(255) NOT NULL,
-  MODIFY `created_at` TIMESTAMP NOT NULL,
-  MODIFY `updated_at` TIMESTAMP NOT NULL;
-
-ALTER TABLE `MESSAGES`
-  MODIFY `rental_id` INT NOT NULL,
-  MODIFY `user_id` INT NOT NULL,
-  MODIFY `message` VARCHAR(2000) NOT NULL,
-  MODIFY `created_at` TIMESTAMP NOT NULL;
-
-SHOW CREATE TABLE USERS;
-SHOW CREATE TABLE RENTALS;
-SHOW CREATE TABLE MESSAGES;
-```
-
-Ces deux `ALTER TABLE` ne suppriment ni les lignes ni les clés étrangères.
-MySQL valide chaque DDL séparément : ne pas compter sur `ROLLBACK` pour les annuler.
-Comparer les définitions avec le schéma de référence, puis quitter le client et
-relancer le backend avec la commande Compose `start backend`.
