@@ -453,6 +453,28 @@ class BackendApplicationTests {
     }
 
     @Test
+    void fractionalMessageIdentifiersAreRejectedWithoutWriting() throws Exception {
+        String jwt = token(register(email()));
+        int userId = Integer.parseInt(decoder.decode(jwt).getSubject());
+        Rental rental = rentals.saveAndFlush(new Rental("Integer identifiers", BigDecimal.ONE, BigDecimal.TEN,
+                null, "Description", userId));
+        long before = messages.count();
+        try {
+            for (String field : java.util.List.of("rental_id", "user_id")) {
+                Map<String, Object> request = new java.util.HashMap<>(Map.of(
+                        "rental_id", rental.getId(), "user_id", userId, "message", "Invalid fractional identifier"));
+                int id = field.equals("rental_id") ? rental.getId() : userId;
+                request.put(field, new BigDecimal(id + ".75"));
+                assertEquals(400, post("/api/messages", request, jwt).statusCode());
+                assertEquals(before, messages.count());
+            }
+        } finally {
+            messages.deleteAll();
+            rentals.deleteById(rental.getId());
+        }
+    }
+
+    @Test
     void writeRoutesCannotBeUsedWithoutAuthentication() throws Exception {
         assertEquals(401, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"), png(), "image.png", "image/png", null).statusCode());
         assertEquals(401, multipart("PUT", "/api/rentals/1", rentalFields("House", "10", "20"), null, null, null, null).statusCode());
@@ -491,7 +513,7 @@ class BackendApplicationTests {
                 HttpResponse.BodyHandlers.ofString());
     }
 
-    private HttpResponse<String> post(String path, Map<String, String> body, String jwt) throws Exception {
+    private HttpResponse<String> post(String path, Map<String, ?> body, String jwt) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
                 .timeout(Duration.ofSeconds(10)).header("Content-Type", "application/json");
         if (jwt != null) request.header("Authorization", "Bearer " + jwt);
