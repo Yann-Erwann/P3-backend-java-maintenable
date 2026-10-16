@@ -1,0 +1,29 @@
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+COPY frontend/package.json frontend/package-lock.json ./
+
+# Adapter uniquement la copie du lockfile dans l’image au registre public.
+RUN sed -i -e 's|https://na-public.artifactory.swg-devops.com/artifactory/api/npm/wcp-wdp-npm-remote/|https://registry.npmjs.org/|g' \
+    -e 's|?dl=[^"]*||g' -e 's|\.tgzdl=[^"]*|.tgz|g' package-lock.json \
+    && npm ci --registry=https://registry.npmjs.org --no-audit --no-fund
+
+COPY frontend/ ./
+
+# localhost désigne ce conteneur. Mockoon est joignable par son nom Compose.
+ARG API_MODE=mock
+RUN case "$API_MODE" in \
+        mock) API_TARGET=http://mockoon:3001 ;; \
+        backend) API_TARGET=http://backend:8080 ;; \
+        *) echo "API_MODE must be mock or backend" >&2; exit 1 ;; \
+    esac \
+    && sed "s|http://localhost:3001|$API_TARGET|g" src/proxy.config.json > proxy.docker.json \
+    && node -e 'const fs = require("fs"); const file = "proxy.docker.json"; const proxy = JSON.parse(fs.readFileSync(file)); proxy["/images/**"] = { target: "http://backend:8080", secure: false, changeOrigin: true }; fs.writeFileSync(file, JSON.stringify(proxy));' \
+    && chown node:node /app
+
+USER node
+
+EXPOSE 4200
+
+CMD ["npm", "start", "--", "--host", "0.0.0.0", "--proxy-config", "proxy.docker.json"]

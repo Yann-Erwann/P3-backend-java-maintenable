@@ -1,0 +1,9 @@
+**
+!backend/
+!backend/pom.xml
+!backend/mvnw
+!backend/.mvn/
+!backend/.mvn/**
+!backend/src/
+!backend/src/main/
+!backend/src/main/**
