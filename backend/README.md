@@ -278,6 +278,16 @@ n’utilisent pas les données MySQL locales. Deux tests supplémentaires valide
 les exemples Swagger contre les DTO. Les identifiants JSON fractionnaires sont
 refusés avec HTTP 400 avant toute écriture.
 
+Les scénarios HTTP sont répartis dans `AuthenticationTests`, `RentalTests`,
+`MessageTests` et `ImageTests`. `ApiTestSupport` mutualise leur configuration et
+les utilitaires HTTP partagés. La base H2 et les images de test sont nettoyées
+avant chaque scénario, pour permettre une exécution indépendante de leur ordre.
+Pour lancer une seule fonctionnalité, par exemple l’authentification :
+
+```bash
+./mvnw -Dtest=AuthenticationTests test
+```
+
 Les tests JPA sur MySQL 8.4 sont exécutés à la phase Maven `verify`, après les
 tests H2 rapides de la phase `test`. Testcontainers démarre un MySQL temporaire
 initialisé avec `schema.sql` ; Hibernate vérifie les mappings avec
