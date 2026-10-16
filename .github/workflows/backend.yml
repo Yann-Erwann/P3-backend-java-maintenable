@@ -4,14 +4,17 @@ on:
   push:
     branches:
       - '**'
+    tags:
+      - 'v*'
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: backend-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   verify:
@@ -38,7 +41,7 @@ jobs:
             backend/.mvn/wrapper/maven-wrapper.properties
 
       - name: Verify compilation and tests
-        run: ./mvnw -B verify
+        run: ./mvnw -B -ntp clean verify
 
       - name: Save the executable JAR
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -47,3 +50,29 @@ jobs:
           path: backend/target/*.jar
           if-no-files-found: error
           retention-days: 7
+
+  release:
+    name: Publish the GitHub release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download the tested JAR
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: backend-jar
+          path: dist
+
+      - name: Create the release with its executable JAR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: >-
+          gh release create "$RELEASE_TAG" dist/*.jar
+          --repo "$GITHUB_REPOSITORY"
+          --verify-tag
+          --title "ChaTop $RELEASE_TAG"
+          --generate-notes

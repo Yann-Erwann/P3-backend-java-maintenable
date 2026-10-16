@@ -324,12 +324,19 @@ attendus et ne représentent pas un échec de la suite.
 
 ### Vérifications automatiques avec GitHub Actions
 
-Le workflow [Backend CI](../.github/workflows/backend.yml) exécute `./mvnw -B verify`
-dans `backend/` à chaque push sur une branche et pour les pull requests. Il
-installe Java 25 avec `actions/setup-java` et met en cache les dépendances Maven.
-Une erreur de compilation ou un échec de test fait échouer le job **Maven
-verification**. Les tests H2 sont suivis des tests JPA avec MySQL 8.4 dans
-Testcontainers ; le runner GitHub fournit Docker.
+Le workflow unique [Backend CI](../.github/workflows/backend.yml) exécute
+`./mvnw -B -ntp clean verify` dans `backend/` à chaque push sur une branche,
+pour les pull requests et lors du push d’un tag commençant par `v`. Il peut aussi
+être lancé manuellement. Il installe Java 25 avec `actions/setup-java` et met en
+cache les dépendances Maven. Une erreur de compilation ou un échec de test fait
+échouer le job **Maven verification**. Les tests HTTP sur H2 et les tests de
+documentation Swagger sont suivis des tests JPA avec MySQL 8.4 dans
+Testcontainers ; le runner GitHub fournit Docker. Aucun accès à une base locale
+ni aucun secret applicatif ne sont nécessaires.
+
+Une nouvelle exécution automatique sur la même branche ou PR annule la précédente
+encore en cours. Les exécutions sur tag et les lancements manuels ne sont pas
+annulés de cette façon.
 
 Après une exécution réussie, ouvrir **Actions > Backend CI**, sélectionner
 l’exécution et télécharger **backend-jar** dans **Artifacts**. Le JAR est
@@ -337,12 +344,11 @@ conservé sept jours et peut être joint manuellement à une release GitHub.
 
 ## Construire le JAR et publier une release
 
-Le workflow [Backend JAR](../.github/workflows/backend-release.yml) installe
-Java 25, puis exécute `./mvnw -B -ntp clean verify` dans `backend/`. Il lance les
-tests HTTP sur H2, les tests de documentation Swagger et les tests JPA sur
-MySQL 8.4 avec Testcontainers, puis conserve le JAR exécutable avec ses
-dépendances. Aucun accès à une base locale ni aucun secret applicatif ne sont
-nécessaires ; la base MySQL de test est créée automatiquement par Docker.
+Le même workflow **Backend CI** construit le JAR exécutable avec ses dépendances.
+Son job **Publish the GitHub release** dépend de la réussite de **Maven
+verification** et s’exécute uniquement lors du push d’un tag commençant par `v`.
+Il télécharge le JAR validé depuis l’artefact **backend-jar** de cette même
+exécution, puis le joint à la release.
 
 Après avoir commité et poussé le workflow sur `main`, créer et pousser un nouveau
 tag sur le commit à livrer, par exemple depuis la racine :
@@ -360,7 +366,7 @@ nouveau tag pour chaque version ; le workflow ne remplace pas une release
 existante. Le fichier `.jar.original` n’est pas publié.
 
 Pour obtenir uniquement un JAR sans publier de release, ouvrir **Actions >
-Backend JAR > Run workflow**, choisir la branche puis lancer le workflow.
+Backend CI > Run workflow**, choisir la branche puis lancer le workflow.
 Télécharger ensuite `backend-jar` dans les **Artifacts** de l’exécution réussie.
 Cet artefact est conservé sept jours ; le JAR joint à une release n’est pas
 soumis à cette durée.
