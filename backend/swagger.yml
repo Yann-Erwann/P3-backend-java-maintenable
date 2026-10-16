@@ -468,11 +468,16 @@ components:
       properties:
         email:
           type: string
+          format: email
+          maxLength: 255
           example: test@test.com
         password:
           type: string
           example: test!31
           format: password
+          minLength: 1
+          maxLength: 72
+          description: Au plus 72 octets UTF-8 pour BCrypt, sans retirer les espaces du mot de passe.
       required:
         - email
         - password
@@ -482,13 +487,20 @@ components:
         name:
           type: string
           example: Test TEST
+          minLength: 1
+          maxLength: 255
         email:
           type: string
-          example: test@test.com
+          format: email
+          maxLength: 255
+          example: register@example.test
         password:
           type: string
-          example: test!31
+          example: Registration-test!42
           format: password
+          minLength: 8
+          maxLength: 72
+          description: Entre 8 et 72 caractères, avec une limite supplémentaire de 72 octets UTF-8 pour BCrypt.
       required:
         - name
         - email
