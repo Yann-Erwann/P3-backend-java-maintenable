@@ -61,7 +61,7 @@ public class RentalController {
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public MessageResponse create(@Valid @ModelAttribute RentalWriteRequest request,
-            @RequestParam("picture") MultipartFile picture, @AuthenticationPrincipal Jwt jwt) {
+            @RequestParam MultipartFile picture, @AuthenticationPrincipal Jwt jwt) {
         return rentals.create(request, picture, jwt.getSubject());
     }
 

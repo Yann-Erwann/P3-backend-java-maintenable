@@ -31,7 +31,7 @@ public class RentalService {
     }
 
     public RentalsResponse list() {
-        return new RentalsResponse(rentals.findAll(Sort.by(Rental::getId)).stream()
+        return new RentalsResponse(rentals.findAll(Sort.by((Rental rental) -> rental.getId())).stream()
                 .map(RentalSummaryResponse::from).toList());
     }
 
