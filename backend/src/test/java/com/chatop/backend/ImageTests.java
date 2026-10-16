@@ -49,7 +49,22 @@ class ImageTests extends ApiTestSupport {
                 new byte[5 * 1024 * 1024 + 1], "large.png", "image/png", jwt).statusCode());
         assertEquals(count, rentals.count());
         try (var paths = Files.list(UPLOADS)) { assertEquals(files, paths.count()); }
-        assertEquals(404, get("/images/not-a-generated-image.png", null).statusCode());
+    }
+
+    @Test
+    void missingStaticImagesReturn404WithoutRequiringAuthentication() throws Exception {
+        for (String filename : java.util.List.of("not-a-generated-image.png",
+                "00000000-0000-0000-0000-000000000000.png")) {
+            for (String method : java.util.List.of("GET", "HEAD")) {
+                var response = client.send(HttpRequest.newBuilder(
+                        URI.create("http://127.0.0.1:" + port + "/images/" + filename))
+                        .method(method, HttpRequest.BodyPublishers.noBody()).build(),
+                        HttpResponse.BodyHandlers.ofString());
+                assertEquals(404, response.statusCode());
+                if (method.equals("HEAD")) assertTrue(response.body().isEmpty());
+            }
+        }
+        assertEquals(401, get("/error", null).statusCode());
     }
 
     @Test
@@ -76,6 +91,10 @@ class ImageTests extends ApiTestSupport {
                 assertEquals(200, response.statusCode());
                 assertEquals(origin, response.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
                 assertEquals("image/png", response.headers().firstValue("Content-Type").orElseThrow());
+                assertEquals("nosniff", response.headers().firstValue("X-Content-Type-Options").orElseThrow());
+                String cacheControl = response.headers().firstValue("Cache-Control").orElseThrow();
+                assertTrue(cacheControl.contains("max-age=86400"));
+                assertTrue(cacheControl.contains("public"));
                 assertNotNull(ImageIO.read(new java.io.ByteArrayInputStream(response.body())));
             }
             var head = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/images/" + filename))
@@ -84,6 +103,7 @@ class ImageTests extends ApiTestSupport {
             assertEquals(200, head.statusCode());
             assertEquals(0, head.body().length);
             assertEquals("http://localhost:8081", head.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
+            assertTrue(head.headers().firstValue("Cache-Control").orElseThrow().contains("public"));
         } finally {
             images.delete(filename);
         }

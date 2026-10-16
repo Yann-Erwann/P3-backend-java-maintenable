@@ -221,10 +221,17 @@ et les identifiants dans `.env`, puis ne lancer que le service Docker `swagger-u
 ## Images et conservation des données
 
 Les images acceptées sont des PNG ou JPEG valides de **5 Mio maximum**, avec
-au plus 4096 pixels par dimension. Le backend les réencode en PNG et les sert
-publiquement sous `/images/{filename}` pour l’affichage dans Angular. Les lectures
-GET et HEAD depuis les origines locales Swagger et Angular sont autorisées par
-CORS ; les origines non configurées et les prévols d’écriture sont refusés.
+au plus 4096 pixels par dimension. Le backend les réencode en PNG. Spring Boot
+sert directement les fichiers de `UPLOAD_DIR` sous `/images/{filename}`, comme
+ressources statiques publiques pour l’affichage dans Angular. Ce dossier est
+réservé aux photos générées par l’application. Les lectures GET et HEAD depuis
+les origines locales Swagger et Angular sont autorisées par CORS ; les origines
+non configurées et les prévols d’écriture sont refusés.
+
+Il n’y a pas de contrôleur REST ni d’opération Swagger dédiée aux images : le
+contrat conserve les neuf opérations métier. Le chemin statique et son dossier
+source sont configurés dans `application.properties` ; les photos conservent
+leur URL, un cache public d’un jour et la protection `nosniff`.
 
 Les données MySQL sont conservées dans le volume `mysql_data`, et les images
 dans `rental_images`, monté sur `/app/uploads`. Pour Java sur l’hôte, le répertoire
