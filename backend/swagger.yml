@@ -2,10 +2,10 @@ openapi: 3.0.3
 info:
   title: ChaTop
   version: 1.0.0
-  description: Contrat cible ChaTop ; les routes backend sont livrées dans les commits suivants.
+  description: API ChaTop avec authentification JWT.
 servers:
   - url: http://localhost:8080/api
-    description: Backend Spring Boot (contrat cible)
+    description: Backend Spring Boot (routes disponibles à cette étape)
   - url: http://localhost:3001/api
     description: Mockoon (réponses statiques)
 security:
@@ -43,36 +43,76 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RegisterRequest'
-      description: Contrat cible ChaTop ; les routes backend sont livrées dans les commits suivants.
-servers:
-        - url: http://localhost:8080
-          description: Ressources statiques du backend, hors préfixe /api
-      security: []
       description: >-
-        Ressource statique publique au nom UUID généré par le serveur, pour les balises img qui n’envoient pas d’en-tête
-        JWT. Aucun chemin de fichier fourni par l’utilisateur n’est utilisé. Le proxy Docker expose aussi cette URL sur
-        le frontend. Le mock ne fournit pas cette route.
-      parameters:
-        - name: filename
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$
+        Backend : email normalisé, nom non vide et mot de passe de 8 caractères minimum, au plus 72 octets UTF-8. Le mot
+        de passe est haché avec BCrypt ; un JWT valable une heure par défaut est renvoyé. Le mock conserve ses réponses
+        statiques.
+  /auth/login:
+    post:
+      operationId: login
+      summary: Se connecter
+      tags:
+        - Authentification
       responses:
         '200':
-          description: Image PNG normalisée
+          description: 'JWT émis après inscription ou connexion réussie (backend et mock : HTTP 200)'
           content:
-            image/png:
+            application/json:
               schema:
-                type: string
-                format: binary
-        '404':
-          description: Image absente ou nom invalide
+                $ref: '#/components/schemas/AuthSuccess'
+        '400':
+          description: 'Backend : champs absents, format invalide ou mot de passe trop long en UTF-8'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: 'Backend : identifiants incorrects'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      description: >-
+        Backend : email et mot de passe obligatoires ; mauvais identifiants et utilisateur inconnu renvoient la même
+        erreur 401. Aucun compte de démonstration n’est créé automatiquement. Le mock utilise test@test.com / test!31 ;
+        sa règle d’erreur teste login au lieu de email.
+  /auth/me:
+    get:
+      operationId: getCurrentUser
+      summary: Consulter l’utilisateur connecté
+      tags:
+        - Authentification
+      responses:
+        '200':
+          description: Succès (réponse exacte du mock)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: 1
+                name: Test TEST
+                email: test@test.com
+                created_at: 2022/02/02
+                updated_at: 2022/08/02
+        '401':
+          description: Authentification refusée
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: {}
+              example: {}
+      description: >-
+        Backend : profil du propriétaire du JWT sans mot de passe. Un jeton absent, invalide ou expiré est refusé avec
+        HTTP 401. Le mock renvoie son profil statique.
 components:
   securitySchemes:
     bearerAuth:
@@ -113,90 +153,6 @@ components:
         - name
         - email
         - password
-    MessageRequest:
-      type: object
-      properties:
-        user_id:
-          type: integer
-          example: 1
-          minimum: 1
-        rental_id:
-          type: integer
-          example: 1
-          minimum: 1
-        message:
-          type: string
-          minLength: 1
-          maxLength: 2000
-          example: Bonjour, cette location est-elle disponible ?
-      required:
-        - user_id
-        - rental_id
-        - message
-    RentalUpdateRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          example: Maison de test
-          maxLength: 255
-          minLength: 1
-        surface:
-          type: number
-          example: 100
-          minimum: 0.01
-          maximum: 9999999999.99
-          multipleOf: 0.01
-        price:
-          type: number
-          example: 500
-          minimum: 0
-          maximum: 9999999999.99
-          multipleOf: 0.01
-        description:
-          type: string
-          example: Description de la location
-          maxLength: 2000
-          minLength: 1
-      required:
-        - name
-        - surface
-        - price
-        - description
-    RentalCreateRequest:
-      type: object
-      properties:
-        name:
-          type: string
-          example: Maison de test
-          maxLength: 255
-          minLength: 1
-        surface:
-          type: number
-          example: 100
-          minimum: 0.01
-          maximum: 9999999999.99
-          multipleOf: 0.01
-        price:
-          type: number
-          example: 500
-          minimum: 0
-          maximum: 9999999999.99
-          multipleOf: 0.01
-        description:
-          type: string
-          example: Description de la location
-          maxLength: 2000
-          minLength: 1
-        picture:
-          type: string
-          format: binary
-      required:
-        - name
-        - surface
-        - price
-        - description
-        - picture
     AuthSuccess:
       type: object
       properties:
@@ -205,13 +161,6 @@ components:
           description: 'Backend : JWT signé. Mock : chaîne fictive jwt.'
       required:
         - token
-    MessageResponse:
-      type: object
-      properties:
-        message:
-          type: string
-      required:
-        - message
     User:
       type: object
       properties:
@@ -229,106 +178,6 @@ components:
         - id
         - name
         - email
-        - created_at
-        - updated_at
-    RentalsResponse:
-      type: object
-      properties:
-        rentals:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: integer
-              name:
-                type: string
-                nullable: true
-              surface:
-                type: number
-                nullable: true
-                multipleOf: 0.01
-              price:
-                type: number
-                nullable: true
-                multipleOf: 0.01
-              picture:
-                type: string
-                nullable: true
-              description:
-                type: string
-                nullable: true
-              owner_id:
-                type: integer
-              created_at:
-                type: string
-                nullable: true
-                description: >-
-                  Backend : date ISO 8601 ou null pour une ligne ancienne sans date ; les exemples du mock utilisent
-                  YYYY/MM/DD.
-              updated_at:
-                type: string
-                nullable: true
-                description: >-
-                  Backend : date ISO 8601 ou null pour une ligne ancienne sans date ; les exemples du mock utilisent
-                  YYYY/MM/DD.
-            required:
-              - id
-              - name
-              - surface
-              - price
-              - picture
-              - description
-              - owner_id
-              - created_at
-              - updated_at
-      required:
-        - rentals
-    RentalDetail:
-      type: object
-      properties:
-        id:
-          type: integer
-        name:
-          type: string
-          nullable: true
-        surface:
-          type: number
-          nullable: true
-          multipleOf: 0.01
-        price:
-          type: number
-          nullable: true
-          multipleOf: 0.01
-        picture:
-          type: array
-          items:
-            type: string
-        description:
-          type: string
-          nullable: true
-        owner_id:
-          type: integer
-        created_at:
-          type: string
-          nullable: true
-          description: >-
-            Backend : date ISO 8601 ou null pour une ligne ancienne sans date ; les exemples du mock utilisent
-            YYYY/MM/DD.
-        updated_at:
-          type: string
-          nullable: true
-          description: >-
-            Backend : date ISO 8601 ou null pour une ligne ancienne sans date ; les exemples du mock utilisent
-            YYYY/MM/DD.
-      required:
-        - id
-        - name
-        - surface
-        - price
-        - picture
-        - description
-        - owner_id
         - created_at
         - updated_at
     ErrorResponse:
