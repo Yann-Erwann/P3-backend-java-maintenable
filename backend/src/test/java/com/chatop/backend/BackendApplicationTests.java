@@ -38,6 +38,9 @@ import com.chatop.backend.repository.UserRepository;
 import com.chatop.backend.repository.RentalRepository;
 import com.chatop.backend.entity.Rental;
 import com.chatop.backend.entity.User;
+import com.chatop.backend.service.ImageStorageService;
+import com.chatop.backend.service.RentalService;
+import com.chatop.backend.dto.RentalWriteRequest;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -45,6 +48,7 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class BackendApplicationTests {
     private static final String PASSWORD = "Registration-test!42";
+    private static final Path UPLOADS = temporaryImages();
     private final HttpClient client = HttpClient.newHttpClient();
     private final JsonMapper json = JsonMapper.builder().build();
 
@@ -55,6 +59,10 @@ class BackendApplicationTests {
     UserRepository users;
     @Autowired
     RentalRepository rentals;
+    @Autowired
+    ImageStorageService images;
+    @Autowired
+    RentalService rentalService;
     @Autowired
     PasswordEncoder passwords;
     @Autowired
@@ -67,9 +75,23 @@ class BackendApplicationTests {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
         registry.add("app.jwt.secret", () -> Base64.getEncoder().encodeToString(bytes));
+        registry.add("app.upload-dir", UPLOADS::toString);
     }
 
+    private static Path temporaryImages() {
+        try {
+            return Files.createTempDirectory("chatop-images-test-");
+        } catch (IOException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
 
+    @AfterAll
+    static void removeTemporaryImages() throws IOException {
+        try (var files = Files.walk(UPLOADS)) {
+            for (Path file : files.sorted(java.util.Comparator.reverseOrder()).toList()) Files.delete(file);
+        }
+    }
 
     @Test
     void registerPersistsHashAndIssuesUsableJwtWithoutExposingPassword() throws Exception {
@@ -297,8 +319,139 @@ class BackendApplicationTests {
         }
     }
 
+    @Test
+    void createAndUpdatePersistDecimalsAndPreserveTheOwnerAndPicture() throws Exception {
+        String jwt = token(register(email()));
+        int ownerId = Integer.parseInt(decoder.decode(jwt).getSubject());
+        var fields = new java.util.LinkedHashMap<>(rentalFields("Created house", "85.75", "125.45"));
+        fields.put("owner_id", "2147483647");
+        var created = multipart("POST", "/api/rentals", fields, png(), "../../unsafe.html", "image/png", jwt);
+        assertEquals(200, created.statusCode());
+        assertEquals("Rental created !", json.readTree(created.body()).get("message").asText());
+        Rental rental = rentals.findAll().getFirst();
+        try {
+            assertEquals(ownerId, rental.getOwnerId());
+            assertEquals(new BigDecimal("85.75"), rental.getSurface());
+            assertEquals(new BigDecimal("125.45"), rental.getPrice());
+            assertTrue(rental.getPicture().matches("/images/[0-9a-f-]{36}\\.png"));
+            var image = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + rental.getPicture())).GET().build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            assertEquals(200, image.statusCode());
+            assertEquals("image/png", image.headers().firstValue("Content-Type").orElseThrow());
+            assertNotNull(ImageIO.read(new java.io.ByteArrayInputStream(image.body())));
+            var updated = multipart("PUT", "/api/rentals/" + rental.getId(), rentalFields("Updated housing", "95.25", "150.99"),
+                    null, null, null, jwt);
+            assertEquals(200, updated.statusCode());
+            Rental saved = rentals.findById(rental.getId()).orElseThrow();
+            assertEquals("Updated housing", saved.getName());
+            assertEquals(new BigDecimal("150.99"), saved.getPrice());
+            assertEquals(new BigDecimal("95.25"), saved.getSurface());
+            assertEquals(ownerId, saved.getOwnerId());
+            assertEquals(rental.getPicture(), saved.getPicture());
+            assertEquals(rental.getCreatedAt(), saved.getCreatedAt());
+            assertFalse(saved.getUpdatedAt().isBefore(saved.getCreatedAt()));
+        } finally {
+            rentals.deleteById(rental.getId());
+            images.delete(rental.getPicture().substring("/images/".length()));
+        }
+    }
 
+    @Test
+    void anotherUserCannotModifyARental() throws Exception {
+        String ownerJwt = token(register(email()));
+        int ownerId = Integer.parseInt(decoder.decode(ownerJwt).getSubject());
+        Rental rental = rentals.saveAndFlush(new Rental("Private edit", BigDecimal.ONE, BigDecimal.TEN,
+                "https://example.test/image.png", "Original description", ownerId));
+        try {
+            String otherJwt = token(register(email()));
+            assertEquals(403, multipart("PUT", "/api/rentals/" + rental.getId(), rentalFields("Stolen", "2", "20"),
+                    null, null, null, otherJwt).statusCode());
+            assertEquals("Private edit", rentals.findById(rental.getId()).orElseThrow().getName());
+            assertEquals(404, multipart("PUT", "/api/rentals/2147483647", rentalFields("Missing", "2", "20"),
+                    null, null, null, ownerJwt).statusCode());
+        } finally {
+            rentals.deleteById(rental.getId());
+        }
+    }
 
+    @Test
+    void invalidFieldsAndImagesDoNotCreateRentalsOrFiles() throws Exception {
+        String jwt = token(register(email()));
+        long count = rentals.count();
+        long files;
+        try (var paths = Files.list(UPLOADS)) { files = paths.count(); }
+        for (var fields : java.util.List.of(rentalFields(" ", "10", "20"), rentalFields("House", "0", "20"),
+                rentalFields("House", "10", "-1"), rentalFields("House", "10", "1.234"),
+                rentalFields("House", "not-a-number", "20"), rentalFields("House", "10", "10000000000"))) {
+            assertEquals(400, multipart("POST", "/api/rentals", fields, png(), "image.png", "image/png", jwt).statusCode());
+        }
+        assertEquals(400, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"), null, null, null, jwt).statusCode());
+        assertEquals(400, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"), new byte[0], "empty.png", "image/png", jwt).statusCode());
+        assertEquals(400, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"),
+                "<script>bad</script>".getBytes(StandardCharsets.UTF_8), "fake.png", "image/png", jwt).statusCode());
+        assertEquals(400, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"), png(), "image.png", "text/html", jwt).statusCode());
+        var oversizedDimensions = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(4097, 1, BufferedImage.TYPE_INT_RGB), "png", oversizedDimensions);
+        assertEquals(400, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"),
+                oversizedDimensions.toByteArray(), "wide.png", "image/png", jwt).statusCode());
+        assertEquals(413, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"),
+                new byte[5 * 1024 * 1024 + 1], "large.png", "image/png", jwt).statusCode());
+        assertEquals(count, rentals.count());
+        try (var paths = Files.list(UPLOADS)) { assertEquals(files, paths.count()); }
+        assertEquals(404, get("/images/not-a-generated-image.png", null).statusCode());
+    }
+
+    @Test
+    void databaseRollbackAlsoRemovesTheNewImage() throws Exception {
+        String jwt = token(register(email()));
+        var file = new MockMultipartFile("picture", "image.png", "image/png", png());
+        long before;
+        try (var paths = Files.list(UPLOADS)) { before = paths.count(); }
+        // Une défaillance SQL après l’écriture du fichier doit déclencher son nettoyage.
+        assertThrows(DataIntegrityViolationException.class, () -> rentalService.create(
+                new RentalWriteRequest("x".repeat(256), BigDecimal.ONE, BigDecimal.ONE, "Description"),
+                file, decoder.decode(jwt).getSubject()));
+        try (var paths = Files.list(UPLOADS)) { assertEquals(before, paths.count()); }
+    }
+
+    @Test
+    void writeRoutesCannotBeUsedWithoutAuthentication() throws Exception {
+        assertEquals(401, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"), png(), "image.png", "image/png", null).statusCode());
+        assertEquals(401, multipart("PUT", "/api/rentals/1", rentalFields("House", "10", "20"), null, null, null, null).statusCode());
+        assertEquals(401, post("/api/messages", Map.of("rental_id", "1", "user_id", "1", "message", "Hello"), null).statusCode());
+    }
+
+    private Map<String, String> rentalFields(String name, String surface, String price) {
+        return Map.of("name", name, "surface", surface, "price", price, "description", "Description for the rental");
+    }
+
+    private byte[] png() throws IOException {
+        var bytes = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "png", bytes);
+        return bytes.toByteArray();
+    }
+
+    private HttpResponse<String> multipart(String method, String path, Map<String, String> fields,
+            byte[] image, String filename, String mediaType, String jwt) throws Exception {
+        String boundary = "chatop-" + UUID.randomUUID();
+        var body = new ByteArrayOutputStream();
+        for (var field : fields.entrySet()) {
+            body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + field.getKey()
+                    + "\"\r\n\r\n" + field.getValue() + "\r\n").getBytes(StandardCharsets.UTF_8));
+        }
+        if (image != null) {
+            body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"picture\"; filename=\""
+                    + filename + "\"\r\nContent-Type: " + mediaType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            body.write(image);
+            body.write("\r\n".getBytes(StandardCharsets.UTF_8));
+        }
+        body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))
+                .timeout(Duration.ofSeconds(15)).header("Content-Type", "multipart/form-data; boundary=" + boundary);
+        if (jwt != null) request.header("Authorization", "Bearer " + jwt);
+        return client.send(request.method(method, HttpRequest.BodyPublishers.ofByteArray(body.toByteArray())).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
 
     private HttpResponse<String> post(String path, Map<String, String> body, String jwt) throws Exception {
         var request = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path))

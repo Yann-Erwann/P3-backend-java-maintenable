@@ -25,4 +25,13 @@ public class UserService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
     }
 
+    public Integer authenticatedId(String subject) {
+        try {
+            Integer id = Integer.valueOf(subject);
+            if (id > 0 && users.existsById(id)) return id;
+        } catch (NumberFormatException e) {
+            // Un jeton valide doit désigner un utilisateur existant.
+        }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid user");
+    }
 }

@@ -179,6 +179,45 @@ paths:
         Backend : toutes les locations triées par identifiant croissant, sous la forme { rentals: [...] }. Une table
         vide renvoie { rentals: [] }. picture est une chaîne (ou null si absent dans les données existantes). Aucun
         chargement du profil propriétaire dans cette réponse : utiliser owner_id et GET /user/{id}.
+    post:
+      operationId: createRental
+      summary: Créer une location
+      tags:
+        - Locations
+      responses:
+        '200':
+          description: 'Backend : écriture persistée dans MySQL ; même message de succès que le mock fourni.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Rental created !
+        '400':
+          description: Champs manquants, invalides ou contenu de fichier non accepté
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentification refusée
+        '413':
+          description: Image de plus de 5 Mio ou requête multipart de plus de 6 Mio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalCreateRequest'
+      description: >-
+        Création multipart : name et description non vides, surface strictement positive, price positif ou nul, deux
+        décimales maximum. picture est obligatoire : PNG ou JPEG valide, au plus 5 Mio et 4096 pixels par dimension,
+        réencodé en PNG avec un nom UUID. owner_id provient du JWT et ne peut pas être imposé par le client. La réponse
+        conserve HTTP 200 attendu par Angular.
   /rentals/{id}:
     get:
       operationId: getRental
@@ -235,6 +274,56 @@ paths:
       description: >-
         Backend : location correspondant à id, ou 404 si absente. picture conserve le tableau du contrat du mock : une
         URL lorsqu’elle est renseignée en base, sinon un tableau vide. Le mock reste statique quel que soit id.
+    put:
+      operationId: updateRental
+      summary: Modifier une location
+      tags:
+        - Locations
+      responses:
+        '200':
+          description: 'Backend : écriture persistée dans MySQL ; même message de succès que le mock fourni.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Rental updated !
+        '400':
+          description: Champs manquants, invalides ou contenu de fichier non accepté
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentification refusée
+        '403':
+          description: Utilisateur authentifié différent du propriétaire
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Location introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          example: 1
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RentalUpdateRequest'
+      description: >-
+        Modification multipart réservée au propriétaire authentifié. Met à jour name, surface, price, description et
+        updated_at ; conserve owner_id, created_at et picture. Le frontend ne transmet pas d’image à la modification.
   /user/{id}:
     get:
       operationId: getUser
@@ -281,6 +370,41 @@ paths:
         Backend : profil utilisateur correspondant à id, accessible avec un JWT valide, notamment pour afficher le
         propriétaire d’une location. Renvoie id, name, email et dates, jamais le mot de passe. Retourne 404 si absent.
         Le mock reste statique.
+  /images/{filename}:
+    get:
+      operationId: getRentalImage
+      summary: Afficher une photo de location
+      tags:
+        - Images
+      servers:
+        - url: http://localhost:8080
+          description: Ressources statiques du backend, hors préfixe /api
+      security: []
+      description: >-
+        Ressource statique publique au nom UUID généré par le serveur, pour les balises img qui n’envoient pas d’en-tête
+        JWT. Aucun chemin de fichier fourni par l’utilisateur n’est utilisé. Le proxy Docker expose aussi cette URL sur
+        le frontend. Le mock ne fournit pas cette route.
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$
+      responses:
+        '200':
+          description: Image PNG normalisée
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: Image absente ou nom invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -321,6 +445,70 @@ components:
         - name
         - email
         - password
+    RentalUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Maison de test
+          maxLength: 255
+          minLength: 1
+        surface:
+          type: number
+          example: 100
+          minimum: 0.01
+          maximum: 9999999999.99
+          multipleOf: 0.01
+        price:
+          type: number
+          example: 500
+          minimum: 0
+          maximum: 9999999999.99
+          multipleOf: 0.01
+        description:
+          type: string
+          example: Description de la location
+          maxLength: 2000
+          minLength: 1
+      required:
+        - name
+        - surface
+        - price
+        - description
+    RentalCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Maison de test
+          maxLength: 255
+          minLength: 1
+        surface:
+          type: number
+          example: 100
+          minimum: 0.01
+          maximum: 9999999999.99
+          multipleOf: 0.01
+        price:
+          type: number
+          example: 500
+          minimum: 0
+          maximum: 9999999999.99
+          multipleOf: 0.01
+        description:
+          type: string
+          example: Description de la location
+          maxLength: 2000
+          minLength: 1
+        picture:
+          type: string
+          format: binary
+      required:
+        - name
+        - surface
+        - price
+        - description
+        - picture
     AuthSuccess:
       type: object
       properties:
@@ -329,6 +517,13 @@ components:
           description: 'Backend : JWT signé. Mock : chaîne fictive jwt.'
       required:
         - token
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
     User:
       type: object
       properties:

@@ -10,6 +10,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 @Entity
@@ -62,7 +63,17 @@ public class Rental {
         updatedAt = createdAt;
     }
 
+    public void update(String name, BigDecimal surface, BigDecimal price, String description) {
+        this.name = name;
+        this.surface = surface;
+        this.price = price;
+        this.description = description;
+    }
 
+    @PreUpdate
+    void onUpdate() {
+        updatedAt = LocalDateTime.now(ZoneOffset.UTC);
+    }
 
     public Integer getId() { return id; }
     public String getName() { return name; }
