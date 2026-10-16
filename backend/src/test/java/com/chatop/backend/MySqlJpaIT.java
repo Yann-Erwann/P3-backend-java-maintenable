@@ -89,9 +89,10 @@ class MySqlJpaIT {
         @Bean
         @ServiceConnection
         MySQLContainer mysql() {
-            return new MySQLContainer("mysql:8.4")
-                    .withDatabaseName("chatop_jpa_test")
-                    .withPassword(UUID.randomUUID().toString());
+            var mysql = new MySQLContainer("mysql:8.4");
+            mysql.withDatabaseName("chatop_jpa_test");
+            mysql.withPassword(UUID.randomUUID().toString());
+            return mysql;
         }
     }
 

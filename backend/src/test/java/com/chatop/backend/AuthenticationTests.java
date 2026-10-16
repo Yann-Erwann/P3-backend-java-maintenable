@@ -20,7 +20,6 @@ import org.springframework.security.oauth2.jwt.JwsHeader;
 import org.springframework.security.oauth2.jwt.JwtClaimsSet;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import com.chatop.backend.entity.User;
 import tools.jackson.databind.JsonNode;
 
 class AuthenticationTests extends ApiTestSupport {
