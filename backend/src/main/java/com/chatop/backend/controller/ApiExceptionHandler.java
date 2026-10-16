@@ -35,6 +35,6 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     ResponseEntity<ErrorResponse> oversizedImage(MaxUploadSizeExceededException exception) {
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(new ErrorResponse("Image exceeds upload limit"));
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).body(new ErrorResponse("Image exceeds upload limit"));
     }
 }

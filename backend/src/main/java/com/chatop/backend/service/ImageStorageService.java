@@ -40,7 +40,7 @@ public class ImageStorageService {
     public String store(MultipartFile file) {
         if (file.isEmpty()) throw invalid("An image is required");
         if (file.getSize() > MAX_BYTES) {
-            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Image exceeds 5 MiB");
+            throw new ResponseStatusException(HttpStatus.CONTENT_TOO_LARGE, "Image exceeds 5 MiB");
         }
         String contentType = file.getContentType();
         if (!"image/png".equals(contentType) && !"image/jpeg".equals(contentType)) {
