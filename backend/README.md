@@ -291,6 +291,15 @@ attendus et ne représentent pas un échec de la suite.
 | Swagger affiche `Failed to fetch` | Vérifier l’adresse du serveur sélectionné, le démarrage du backend et les ports transférés en SSH. |
 | Réponse 401 sur une route protégée | Se connecter au serveur sélectionné et renseigner son jeton dans **Authorize**. |
 
+### Vérifications automatiques avec GitHub Actions
+
+Le workflow [Backend CI](../.github/workflows/backend.yml) exécute `./mvnw -B verify`
+dans `backend/` à chaque push sur une branche et pour les pull requests. Il
+installe Java 25 avec `actions/setup-java` et met en cache les dépendances Maven.
+Une erreur de compilation ou un échec de test fait échouer le job **Maven
+verification**. Les tests utilisent H2 ; le test MySQL optionnel conserve sa
+configuration explicite décrite ci-dessous.
+
 ## Maintenance d’une base existante et tests MySQL
 
 ### Aligner une ancienne base sans effacer les données
