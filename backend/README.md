@@ -300,6 +300,51 @@ Une erreur de compilation ou un échec de test fait échouer le job **Maven
 verification**. Les tests utilisent H2 ; le test MySQL optionnel conserve sa
 configuration explicite décrite ci-dessous.
 
+## Construire le JAR et publier une release
+
+Le workflow [Backend JAR](../.github/workflows/backend-release.yml) installe
+Java 25, puis exécute `./mvnw -B -ntp clean verify` dans `backend/`. Il lance les
+tests HTTP sur H2 et les tests de documentation Swagger, puis construit le JAR
+exécutable avec ses dépendances. Le test MySQL optionnel reste désactivé : aucun
+accès à une base locale ni aucun secret applicatif ne sont nécessaires.
+
+Après avoir commité et poussé le workflow sur `main`, créer et pousser un nouveau
+tag sur le commit à livrer, par exemple depuis la racine :
+
+```bash
+git push origin main
+git tag -a v1.0.0 -m "ChaTop v1.0.0"
+git push origin v1.0.0
+```
+
+Chaque tag commençant par `v` déclenche la compilation. Si les tests et la
+construction réussissent, le workflow crée la release du même nom avec des notes
+générées automatiquement et y joint le JAR de `backend/target/`. Utiliser un
+nouveau tag pour chaque version ; le workflow ne remplace pas une release
+existante. Le fichier `.jar.original` n’est pas publié.
+
+Pour obtenir uniquement un JAR sans publier de release, ouvrir **Actions >
+Backend JAR > Run workflow**, choisir la branche puis lancer le workflow.
+Télécharger ensuite `backend-jar` dans les **Artifacts** de l’exécution réussie.
+Cet artefact est conservé sept jours ; le JAR joint à une release n’est pas
+soumis à cette durée.
+
+La publication utilise le `GITHUB_TOKEN` fourni automatiquement par GitHub.
+Seul le job de publication reçoit `contents: write` ; le job de compilation
+conserve un accès en lecture. Aucun token personnel n’est à configurer.
+
+Pour reproduire la construction localement, depuis `backend/` :
+
+```bash
+./mvnw -B -ntp clean verify
+```
+
+Le JAR nécessite Java 25, une base MySQL initialisée et les variables de
+configuration décrites plus haut pour exécuter le backend.
+
+Références : [déclenchement des workflows GitHub Actions](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)
+et [création d’une release avec GitHub CLI](https://cli.github.com/manual/gh_release_create).
+
 ## Maintenance d’une base existante et tests MySQL
 
 ### Aligner une ancienne base sans effacer les données
