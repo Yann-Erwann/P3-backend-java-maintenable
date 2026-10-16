@@ -266,6 +266,9 @@ Une photo peut être ouverte dans le navigateur à l’adresse
 
 ## Vérifications et dépannage
 
+Les conventions de contribution et les contrôles à effectuer avant chaque commit
+sont décrits dans [CONTRIBUTING.md](../CONTRIBUTING.md).
+
 Depuis `backend/`, lancer les tests HTTP avec leur base H2 isolée :
 
 ```bash
