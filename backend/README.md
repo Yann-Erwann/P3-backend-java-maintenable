@@ -1,167 +1,80 @@
 # Backend ChaTop
 
-Le [README à la racine](../README.md) décrit le démarrage complet avec Docker,
-MySQL, Mockoon et Swagger UI, les tests de l'API, les transferts de ports Remote
-SSH, le redémarrage automatique et le dépannage.
+API REST de gestion de locations, développée avec Java 25, Spring Boot 4.1.1
+et MySQL 8.4. Le projet comprend un frontend Angular et un environnement Docker
+pour lancer l’application complète en développement local.
 
-Cette page décrit l’authentification, la consultation, la création et la modification
-des locations, l’envoi de messages et les outils de test de l’API. Les réponses Mockoon
-ne prouvent ni une implémentation Spring Boot ni une persistance dans MySQL.
+**Documentation de l’API : [Swagger UI](http://localhost:8081)**, accessible après
+le démarrage décrit ci-dessous. Le contrat est disponible dans [swagger.yml](swagger.yml).
 
-## Authentification implémentée
+Sauf indication contraire, exécuter toutes les commandes depuis la **racine du
+projet**, le dossier contenant `backend/`, `frontend/` et `docker/`.
 
-| Route | Résultat |
-| --- | --- |
-| `POST /api/auth/register` | HTTP 200 et `{ "token": "..." }` ; utilisateur enregistré dans `USERS` |
-| `POST /api/auth/login` | HTTP 200 et JWT après vérification du mot de passe |
-| `GET /api/auth/me` | HTTP 200 et profil du propriétaire du JWT, sans mot de passe |
+## Prérequis
 
-Les deux POST sont publics ; les autres routes métier exigent un JWT Bearer.
-Les origines locales Swagger (`http://localhost:8081`, `http://127.0.0.1:8081`)
-et Angular (`http://localhost:4200`, `http://127.0.0.1:4200`, y compris via le
-proxy) sont autorisées par CORS ; les autres origines sont refusées.
-Les chemins de documentation Swagger restent autorisés ; l’interface Swagger
-est actuellement servie par le conteneur dédié sur `http://localhost:8081`.
+- Git.
+- Docker Engine ou Docker Desktop, démarré, avec Docker Compose v2 ou supérieur.
+- OpenSSL pour générer la clé JWT.
+- Java 25 uniquement pour lancer le backend hors Docker ; Maven est fourni par
+  le wrapper `backend/mvnw`. Docker fournit Java et Node.js pour le lancement complet.
 
-L’email est normalisé (espaces extérieurs retirés, minuscules), le nom doit être
-non vide et le mot de passe d’inscription doit contenir au moins 8 caractères,
-avec une limite de 72 octets UTF-8 pour BCrypt. Il est haché avec BCrypt avant
-son enregistrement. Les champs invalides renvoient 400, un email déjà utilisé
-409, et de mauvais identifiants 401 avec un message générique.
-
-Les JWT sont signés en HS256 avec `JWT_SECRET` (clé aléatoire en Base64 d’au
-moins 32 octets). Leur durée est configurée par `JWT_TTL` (`PT1H` par défaut).
-Le backend vérifie la signature, l’émetteur et l’expiration et refuse le jeton
-fictif `jwt`. Aucune clé réelle n’est incluse dans le dépôt ou l’image Docker.
-
-Configurer `.env` à partir de `.env.example`, notamment `JWT_SECRET` et
-`API_MODE=backend`, puis suivre les commandes du [README racine](../README.md).
-La bascule nécessite une reconstruction du frontend avec `--build`. Les sources
-Angular et le mock restent inchangés. Toutes les opérations métier du contrat sont maintenant implémentées.
-
-### Vérification
-
-Depuis `backend/` :
+Vérifier Docker et Compose :
 
 ```bash
-./mvnw test
+docker --version
+docker compose version
 ```
 
-Les tests HTTP utilisent un serveur réel sur un port aléatoire, une base H2
-isolée et une clé JWT générée pour les tests. Ils vérifient inscription,
-connexion, profil, hachage, doublons dont inscriptions concurrentes, entrées
-invalides et rejet des jetons absents, fictifs, altérés, expirés ou d’un autre émetteur.
-Ils n’utilisent ni les identifiants ni les données de la base MySQL locale.
+Si l’accès au socket Docker est refusé, préfixer les commandes `docker` par `sudo`.
 
-Les essais avec Angular doivent porter sur le backend réel : inscription,
-affichage du compte, déconnexion, reconnexion, erreur de mot de passe et doublon.
-Vérifier aussi dans MySQL la présence de l’utilisateur et d’un hash BCrypt.
-Un succès du mock ne constitue pas une preuve de ces parcours.
+## Installation et configuration
 
-## Consultation des locations et du propriétaire
-
-| Route protégée par JWT | Résultat |
-| --- | --- |
-| `GET /api/rentals` | HTTP 200 et `{ "rentals": [...] }`, trié par identifiant croissant |
-| `GET /api/rentals/{id}` | HTTP 200 et détail de la location demandée |
-| `GET /api/user/{id}` | HTTP 200 et profil du propriétaire (id, nom, email, dates), sans mot de passe |
-
-Ces routes lisent les tables `RENTALS` et `USERS` de MySQL. Une table `RENTALS`
-vide renvoie `{ "rentals": [] }` ; aucune location fictive n’est injectée.
-Un identifiant introuvable renvoie 404 avec un message JSON ; un identifiant
-non entier, non positif ou hors plage renvoie 400. Sans JWT valide, l’accès est
-refusé avec 401. Tout utilisateur authentifié peut consulter les locations et
-le profil de leur propriétaire, indépendamment de l’auteur de la location.
-
-Pour préserver le contrat consommé par Angular, `picture` est une chaîne dans
-la liste et un tableau contenant l’URL dans le détail (tableau vide si absente).
-Les dates du backend utilisent ISO 8601, contrairement aux exemples du mock.
-Les champs facultatifs des lignes existantes peuvent être nuls.
-
-Les colonnes `surface` et `price` sont désormais des `DECIMAL(12,2)` : les dix
-chiffres entiers du schéma initial sont conservés et deux décimales sont disponibles.
-
-Les tests HTTP vérifient aussi les réponses vides, le contenu et l’ordre de la
-liste, le détail, les formats de `picture`, l’absence de mot de passe dans les
-profils, ainsi que les erreurs 400, 401 et 404. Les essais Angular portent sur
-l’affichage de la liste, le passage au détail et l’affichage du nom du propriétaire.
-
-## Création, modification et messages
-
-| Route protégée par JWT | Résultat |
-| --- | --- |
-| `POST /api/rentals` | Multipart avec image ; HTTP 200, `{ "message": "Rental created !" }` |
-| `PUT /api/rentals/{id}` | Multipart sans nouvelle image ; HTTP 200, `{ "message": "Rental updated !" }` |
-| `POST /api/messages` | JSON ; HTTP 200, `{ "message": "Message send with success" }` |
-
-Les locations acceptent `name` (1 à 255 caractères), `description` (1 à 2000),
-`surface` strictement positive et `price` positif ou nul. Les valeurs numériques
-acceptent dix chiffres entiers et deux décimales au maximum. La création exige
-`picture`. Le propriétaire vient du JWT ; un champ `owner_id` client ne le remplace pas.
-La modification est réservée au propriétaire et conserve l’image ainsi que
-l’auteur et la date de création. Les valeurs incorrectes renvoient 400, un autre
-propriétaire 403, et une location absente 404.
-
-Les messages exigent `rental_id`, `user_id` et un texte non vide de 2000 caractères
-maximum. L’auteur enregistré provient du JWT : une usurpation de `user_id` est
-refusée avec 403. Une location absente renvoie 404. Le succès signifie que le
-message est enregistré dans `MESSAGES` ; aucun email n’est envoyé.
-
-### Images
-
-Les images reçues doivent être des PNG ou JPEG valides, de 5 Mio maximum et de
-4096 pixels maximum sur chaque dimension. La requête multipart est limitée à
-6 Mio ; un dépassement renvoie 413. Les formats invalides ou incohérents avec
-leur type MIME sont refusés avec 400. Le serveur décode puis réencode l’image
-en PNG, avec un nom UUID indépendant du nom de fichier transmis par le client.
-
-Les ressources `/images/{filename}` sont publiques, hors API métier, pour que
-les balises `img` Angular puissent les afficher sans en-tête Authorization.
-Elles exposent uniquement les PNG générés, avec `Content-Type: image/png` et
-`nosniff`. Les noms invalides, fichiers absents et liens symboliques sont refusés.
-Le proxy Docker transmet `/images/**` au backend sans changer le frontend fourni.
-
-Dans Docker, le volume nommé `rental_images` est monté sur `/app/uploads` et
-conserve les images après recréation du backend. Hors Docker, `UPLOAD_DIR`
-peut définir le répertoire ; sa valeur par défaut est `./uploads` depuis le
-répertoire de lancement, ignoré par Git lorsqu’il se trouve dans `backend/`.
-Le répertoire doit être accessible en écriture à l’utilisateur du processus.
-
-Si la transaction SQL échoue après le stockage d’une image, celle-ci est
-supprimée au rollback. Une panne du processus entre l’écriture du fichier et
-la fin de la transaction peut toutefois laisser un fichier orphelin ; le disque
-et MySQL ne constituent pas une transaction unique.
-
-### Consulter les photos dans Docker
-
-Exécuter ces commandes depuis la racine du projet, avec le backend démarré.
-
-Lister les fichiers et leur taille :
+Cloner le dépôt, puis créer le fichier de configuration locale :
 
 ```bash
-sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec backend ls -lh /app/uploads
+git clone https://github.com/Yann-Erwann/P3-backend-java-maintenable.git
+cd P3-backend-java-maintenable
+cp -n backend/.env.example backend/.env
 ```
 
-Ouvrir un terminal dans le conteneur :
+Si le projet est déjà cloné, se placer à sa racine. `cp -n` conserve un fichier
+`.env` existant. Ce fichier est ignoré par Git et contient les secrets locaux.
+Entourer les mots de passe de quotes simples s’ils contiennent des caractères
+spéciaux, afin de pouvoir charger ce fichier aussi dans Bash.
+
+### Configurer la base de données
+
+Éditer `backend/.env` avec les valeurs suivantes :
+
+| Variable | Valeur par défaut / configuration attendue |
+| --- | --- |
+| `MYSQL_HOST` | `127.0.0.1` pour Java sur l’hôte ; Compose utilise automatiquement `mysql` pour le backend conteneurisé. |
+| `MYSQL_PORT` | `3306`, port MySQL exposé sur l’hôte ; choisir un autre port s’il est occupé. |
+| `MYSQL_DATABASE` | `chatop`, nom de la base créée au premier démarrage. |
+| `MYSQL_USER` | `chatop`, compte applicatif créé au premier démarrage. |
+| `MYSQL_PASSWORD` | Remplacer la valeur d’exemple par le mot de passe du compte applicatif. |
+| `MYSQL_ROOT_PASSWORD` | Choisir un mot de passe distinct pour l’administrateur MySQL du conteneur. |
+| `JWT_SECRET` | Renseigner la clé générée ci-dessous. |
+| `JWT_TTL` | `PT1H`, durée de validité des jetons JWT : une heure. |
+| `API_MODE` | Mettre `backend` pour utiliser l’API réelle depuis le frontend. |
+| `UPLOAD_DIR` | `./uploads` pour Java sur l’hôte ; Compose utilise `/app/uploads`. |
+
+Générer une clé aléatoire de 32 octets encodée en Base64 :
 
 ```bash
-sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec backend sh
+openssl rand -base64 32
 ```
 
-Puis, dans ce terminal :
+Copier le résultat dans la valeur de `JWT_SECRET` et régler le mode de l’API
+dans `backend/.env` :
 
-```sh
-cd /app/uploads
-ls -lah
-exit
+```dotenv
+API_MODE=backend
 ```
 
-Pour afficher une photo dans le navigateur, remplacer `nom-du-fichier.png` par
-un nom relevé dans la liste :
-
-```text
-http://localhost:8080/images/nom-du-fichier.png
-```
+Sur une base déjà initialisée, conserver ses identifiants : modifier `.env` ne
+change ni les comptes ni les mots de passe enregistrés dans MySQL. Les variables
+de création et le script SQL s’appliquent uniquement à un volume vide.
 
 ### Création du schéma
 
@@ -174,8 +87,9 @@ Docker Compose crée la base et l’utilisateur définis par `MYSQL_DATABASE` et
 `MYSQL_USER`, puis exécute le SQL sur cette base uniquement sur un volume vide.
 Hibernate conserve `ddl-auto=none` ; un volume existant n’est pas modifié.
 
-Pour créer la base sans Docker, se connecter avec un compte MySQL autorisé à
-créer une base, puis exécuter ceci en adaptant son nom :
+Pour créer la base sans Docker, utiliser un serveur MySQL 8.4 installé et démarré.
+Se connecter avec un compte administrateur autorisé à créer une base, puis
+exécuter ceci en adaptant son nom :
 
 ```sql
 CREATE DATABASE chatop CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
@@ -185,8 +99,199 @@ SOURCE backend/schema.sql;
 
 La commande `SOURCE` est à lancer depuis le client MySQL ouvert à la racine du
 projet. Le compte applicatif doit disposer des droits sur la base sélectionnée.
-Le nom renseigné dans `MYSQL_DATABASE` doit être le même. Ne pas réexécuter le
-script sur une base contenant déjà ces tables : les `CREATE TABLE` échoueraient.
+Le nom renseigné dans `MYSQL_DATABASE` doit être le même. Pour un serveur MySQL
+sur l’hôte, créer si nécessaire le compte applicatif avec les droits de lecture
+et d’écriture sur cette base, puis reporter ses identifiants dans `.env`. Les
+créations de tables se font avec le compte administrateur ; le backend n’a pas
+besoin de droits de création de tables.
+
+Ne pas réexécuter le script sur une base contenant déjà ces tables : les
+`CREATE TABLE` échoueraient. Aucune table n’est supprimée ou remplacée par ce SQL.
+Pour une base existante issue d’une ancienne version, suivre la procédure de
+maintenance ci-dessous plutôt que réimporter le schéma.
+
+## Lancer le projet avec Docker
+
+Une fois `backend/.env` renseigné, vérifier la configuration puis construire et
+démarrer les services :
+
+```bash
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml config --quiet
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml up -d --build --wait
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml ps
+```
+
+Le premier lancement télécharge les images et les dépendances. MySQL et le
+frontend doivent devenir `healthy`. Attendre également la fin du démarrage de
+Spring Boot avant d’appeler l’API.
+
+| Service | Adresse locale |
+| --- | --- |
+| Application Angular | [http://localhost:4200](http://localhost:4200) |
+| Backend REST | `http://localhost:8080/api` |
+| Swagger UI | [http://localhost:8081](http://localhost:8081) |
+| MySQL | `127.0.0.1:3306` ou le port choisi dans `MYSQL_PORT` |
+| Mockoon, serveur de démonstration | `http://localhost:3001/api` |
+
+Créer un compte dans l’application avec **Register**, puis se connecter avec
+**Login**. Aucun compte de démonstration n’est créé dans MySQL et la liste des
+locations est initialement vide. Un mot de passe d’inscription doit contenir
+au moins 8 caractères et au plus 72 octets UTF-8.
+
+Pour contrôler les tables depuis le conteneur MySQL :
+
+```bash
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" mysql -u "$MYSQL_USER" "$MYSQL_DATABASE" -e "SHOW TABLES;"'
+```
+
+Le résultat doit contenir `USERS`, `RENTALS` et `MESSAGES`.
+
+### Utiliser Mockoon à la place du backend
+
+Le réglage `API_MODE=mock` utilise les réponses fictives du
+[mock fourni](../frontend/ressources/mockoon/rental-oc.json), sans écriture dans MySQL.
+Les identifiants de démonstration sont `test@test.com` / `test!31`.
+
+Après chaque changement de `API_MODE` dans `.env`, reconstruire le frontend :
+
+```bash
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml up -d --build frontend
+```
+
+Se déconnecter puis se reconnecter après la bascule : les comptes et les jetons
+du mock sont distincts de ceux du backend.
+
+## Swagger : consulter et tester l’API
+
+Ouvrir **[http://localhost:8081](http://localhost:8081)**. Swagger UI est servi
+par un conteneur dédié qui charge [swagger.yml](swagger.yml).
+
+1. Sélectionner le serveur **`http://localhost:8080/api`** pour tester le backend réel.
+2. Déplier `POST /auth/register`, cliquer sur **Try it out**, renseigner `name`,
+   `email` et `password`, puis cliquer sur **Execute**. Pour un compte existant,
+   utiliser `POST /auth/login` avec `email` et `password`.
+3. Copier la valeur `token` de la réponse, cliquer sur **Authorize** et coller
+   uniquement le jeton, sans le préfixe `Bearer`.
+4. Tester par exemple `GET /auth/me` ou `GET /rentals`.
+
+L’inscription et la connexion sont publiques ; les autres routes métier
+nécessitent un JWT valide. Le contrat décrit les neuf opérations métier :
+authentification, profils, consultation et écriture des locations, et envoi de messages.
+
+Pour tester le mock, sélectionner `http://localhost:3001/api`, utiliser ses
+identifiants de démonstration puis son jeton fictif `jwt`. Ce jeton est refusé
+par le backend réel.
+
+Avec VS Code Remote SSH, transférer les ports **4200**, **8080** et **8081** vers
+la machine locale ; ajouter **3001** pour le mock et **3306** (ou `MYSQL_PORT`)
+pour un client MySQL local. Le navigateur doit pouvoir joindre l’API sélectionnée.
+
+## Lancer le backend Java sur l’hôte
+
+Installer Java 25 et vérifier `java -version`. Cette variante conserve MySQL et
+Swagger UI dans Docker, puis exécute Spring Boot dans un terminal dédié.
+
+Depuis la racine, arrêter le backend Docker s’il utilise déjà le port 8080 et
+lancer les services nécessaires :
+
+```bash
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml stop backend
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml up -d --wait mysql swagger-ui
+```
+
+Dans un terminal **Bash** ouvert à la racine du projet, exporter les variables
+avant le lancement :
+
+```bash
+set -a
+source backend/.env
+set +a
+cd backend
+./mvnw spring-boot:run
+```
+
+Spring Boot ne charge pas automatiquement `backend/.env`. Dans un IDE, définir
+les mêmes variables dans la configuration de lancement. Le backend est accessible
+sur `http://localhost:8080/api` et peut être testé dans Swagger UI.
+
+Pour utiliser un serveur MySQL déjà installé, créer son schéma comme décrit dans
+la section « Configurer la base de données », adapter `MYSQL_HOST`, `MYSQL_PORT`
+et les identifiants dans `.env`, puis ne lancer que le service Docker `swagger-ui`.
+
+## Images et conservation des données
+
+Les images acceptées sont des PNG ou JPEG valides de **5 Mio maximum**, avec
+au plus 4096 pixels par dimension. Le backend les réencode en PNG et les sert
+publiquement sous `/images/{filename}` pour l’affichage dans Angular. Les lectures
+GET et HEAD depuis les origines locales Swagger et Angular sont autorisées par
+CORS ; les origines non configurées et les prévols d’écriture sont refusés.
+
+Les données MySQL sont conservées dans le volume `mysql_data`, et les images
+dans `rental_images`, monté sur `/app/uploads`. Pour Java sur l’hôte, le répertoire
+`UPLOAD_DIR` doit être accessible en écriture.
+
+Pour arrêter les services depuis la racine sans supprimer leurs volumes :
+
+```bash
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml down
+```
+
+Pour les relancer, reprendre la commande `up -d --build --wait`. Éviter `down -v`
+si les données doivent être conservées : cette option supprime les volumes.
+
+### Consulter les photos dans Docker
+
+Depuis la racine, lister les fichiers du volume d’images :
+
+```bash
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec backend ls -lh /app/uploads
+```
+
+Pour ouvrir un terminal dans le conteneur :
+
+```bash
+docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec backend sh
+```
+
+Puis, dans ce terminal :
+
+```sh
+cd /app/uploads
+ls -lah
+exit
+```
+
+Une photo peut être ouverte dans le navigateur à l’adresse
+`http://localhost:8080/images/nom-du-fichier.png`, en reprenant son nom exact.
+
+## Vérifications et dépannage
+
+Depuis `backend/`, lancer les tests HTTP avec leur base H2 isolée :
+
+```bash
+./mvnw test
+```
+
+Le profil `test` conserve les mappings de l’application et remplace uniquement
+les réglages nécessaires aux tests, dont la datasource H2. Les tests HTTP
+n’utilisent pas les données MySQL locales. Deux tests supplémentaires valident
+les exemples Swagger contre les DTO. Les identifiants JSON fractionnaires sont
+refusés avec HTTP 400 avant toute écriture.
+
+Le test de schéma MySQL est désactivé sans configuration explicite. Sa procédure
+est décrite ci-dessous ; il contrôle aussi les contraintes obligatoires des
+entités JPA. Les avertissements SQL des tests de doublon et de rollback sont
+attendus et ne représentent pas un échec de la suite.
+
+| Problème | Vérification |
+| --- | --- |
+| Erreur d’accès au socket Docker | Préfixer les commandes Docker par `sudo`. |
+| Port MySQL occupé | Modifier `MYSQL_PORT` dans `.env`, puis relancer Compose avec `up -d`. |
+| `Access denied` MySQL | Vérifier les identifiants de la base existante ; changer `.env` ne réinitialise pas ses comptes. |
+| Swagger affiche `Failed to fetch` | Vérifier l’adresse du serveur sélectionné, le démarrage du backend et les ports transférés en SSH. |
+| Réponse 401 sur une route protégée | Se connecter au serveur sélectionné et renseigner son jeton dans **Authorize**. |
+
+## Maintenance d’une base existante et tests MySQL
 
 ### Aligner une ancienne base sans effacer les données
 
@@ -250,7 +355,8 @@ relancer le backend avec la commande Compose `start backend`.
 Le test `MySqlSchemaTests` vérifie le script, les clés et les décimales dans deux
 bases aux noms distincts, créées puis supprimées par le test. Il est désactivé
 sans `MYSQL_TEST_URL`. Utiliser uniquement un serveur MySQL 8.4 réservé aux tests,
-avec un compte autorisé à créer et supprimer ses bases temporaires :
+avec un compte autorisé à créer et supprimer ses bases temporaires. Depuis un
+terminal Bash ouvert à la racine du dépôt :
 
 ```bash
 export MYSQL_TEST_URL='jdbc:mysql://127.0.0.1:3307/mysql?sslMode=DISABLED&allowPublicKeyRetrieval=true'
@@ -265,61 +371,3 @@ unset MYSQL_TEST_URL MYSQL_TEST_USER MYSQL_TEST_PASSWORD
 Ces variables concernent uniquement ce test JDBC ; les tests HTTP ordinaires
 continuent d’utiliser leur H2 isolée. Ne pas utiliser la base locale de travail
 pour ces vérifications.
-
-## Mockoon avec Docker
-
-Le mock utilise le fichier [rental-oc.json](../frontend/ressources/mockoon/rental-oc.json).
-
-Pour démarrer le même serveur avec Docker, depuis la racine du dépôt :
-
-```bash
-sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml up -d mockoon
-sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml logs mockoon
-```
-
-L'API est accessible sur `http://localhost:3001/api`. Pour arrêter uniquement le
-mock : `sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml stop mockoon`.
-
-## Swagger / OpenAPI
-
-Le fichier [`swagger.yml`](swagger.yml), dans ce dossier, décrit les
-9 opérations métier du contrat et la ressource statique des images. Le serveur
-backend et le mock restent sélectionnables séparément dans Swagger UI.
-
-Pour tester le serveur existant :
-
-1. Depuis la racine du dépôt, lancer `sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml up -d mockoon swagger-ui`.
-   Il est aussi possible de démarrer le JSON dans l'application Mockoon sur le
-   port `3001`, avec le préfixe `/api`, à la place du service Docker `mockoon`.
-2. Ouvrir [Swagger UI](http://localhost:8081), qui charge automatiquement `swagger.yml`,
-   puis utiliser **Try it out** sur une route.
-   Sélectionner `http://localhost:3001/api` pour les exemples Mockoon ci-dessous.
-   Pour le backend, sélectionner `http://localhost:8080/api`, créer son compte
-   puis utiliser le JWT renvoyé dans **Authorize**.
-3. Appeler `POST /auth/login` avec `email: test@test.com` et `password: test!31`.
-4. Cliquer sur **Authorize**, saisir `jwt` (sans le préfixe `Bearer`), puis tester
-   par exemple `GET /auth/me`, `GET /rentals` et `GET /rentals/1`.
-
-Exemple de contrôle direct dans un terminal :
-
-```bash
-curl http://localhost:3001/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"test@test.com","password":"test!31"}'
-curl http://localhost:3001/api/rentals -H 'Authorization: Bearer jwt'
-```
-
-Le navigateur qui affiche Swagger doit pouvoir joindre le serveur local ; avec
-Remote SSH, transférer les ports `8081` et `3001` vers la machine locale. Une page Swagger
-servie en HTTP local évite les blocages possibles d'accès HTTP depuis une page
-HTTPS.
-
-Il est aussi possible de créer un environnement Mockoon depuis ce fichier via
-**New local environment from OpenAPI/Swagger**. L'import reproduit les routes et
-les exemples, mais pas les règles conditionnelles du JSON : utiliser le fichier
-[`rental-oc.json`](../frontend/ressources/mockoon/rental-oc.json) pour tester les scénarios d'authentification et d'erreur existants.
-Voir les [limites de compatibilité OpenAPI de Mockoon](https://mockoon.com/docs/latest/openapi/openapi-specification-compatibility/).
-
-Deux particularités du mock sont conservées : `picture` est une chaîne dans la
-liste des locations et un tableau dans le détail ; la règle d'erreur du login
-teste `login` au lieu de `email`, ce qui peut produire un 404 pour certains échecs.
