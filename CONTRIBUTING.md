@@ -3,21 +3,6 @@
 Ces conventions s'appliquent aux prochaines contributions. Elles ne demandent
 aucune réécriture de l'historique existant et n'imposent aucun hook Git.
 
-## Nommage des classes CSS
-
-Utiliser BEM : `bloc`, `bloc__element` et `bloc--variante` ou
-`bloc__element--variante`. Écrire les noms composés en kebab-case et conserver
-la classe de base lorsqu'un modificateur est ajouté.
-
-Exemples : `brand__banner`, `chart-card__title`, `chart-card--history`,
-`country-picker__select--long`. Chaque composant Angular porte sa classe de
-bloc sur son hôte quand ses éléments ou variantes en dépendent. Les classes
-utilitaires transversales, comme `visually-hidden`, restent indépendantes.
-
-Renommer ensemble les templates, les styles, les bindings Angular, le shell
-HTML initial et les sélecteurs des tests. Cibler les éléments par leur classe
-BEM plutôt que par leur balise ou leur position lorsque leur rôle est connu.
-
 ## Messages de commit
 
 Écrire le titre et le corps en anglais avec un titre de la forme :
