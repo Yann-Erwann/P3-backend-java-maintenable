@@ -113,6 +113,174 @@ paths:
       description: >-
         Backend : profil du propriétaire du JWT sans mot de passe. Un jeton absent, invalide ou expiré est refusé avec
         HTTP 401. Le mock renvoie son profil statique.
+  /rentals:
+    get:
+      operationId: listRentals
+      summary: Lister les locations
+      tags:
+        - Locations
+      responses:
+        '200':
+          description: 'Backend : données lues dans MySQL. Les exemples ci-dessous décrivent le mock fourni.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalsResponse'
+              example:
+                rentals:
+                  - id: 1
+                    name: test house 1
+                    surface: 432
+                    price: 300
+                    picture: https://blog.technavio.org/wp-content/uploads/2018/12/Online-House-Rental-Sites.jpg
+                    description: >-
+                      Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam a lectus eleifend, varius massa ac,
+                      mollis tortor. Quisque ipsum nulla, faucibus ac metus a, eleifend efficitur augue. Integer vel
+                      pulvinar ipsum. Praesent mollis neque sed sagittis ultricies. Suspendisse congue ligula at justo
+                      molestie, eget cursus nulla tincidunt. Pellentesque elementum rhoncus arcu, viverra gravida turpis
+                      mattis in. Maecenas tempor elementum lorem vel ultricies. Nam tempus laoreet eros, et viverra
+                      libero tincidunt a. Nunc vel nisi vulputate, sodales massa eu, varius erat.
+                    owner_id: 1
+                    created_at: 2012/12/02
+                    updated_at: 2014/12/02
+                  - id: 1
+                    name: test house 2
+                    surface: 154
+                    price: 200
+                    picture: https://blog.technavio.org/wp-content/uploads/2018/12/Online-House-Rental-Sites.jpg
+                    description: >-
+                      Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam a lectus eleifend, varius massa ac,
+                      mollis tortor. Quisque ipsum nulla, faucibus ac metus a, eleifend efficitur augue. Integer vel
+                      pulvinar ipsum. Praesent mollis neque sed sagittis ultricies. Suspendisse congue ligula at justo
+                      molestie, eget cursus nulla tincidunt. Pellentesque elementum rhoncus arcu, viverra gravida turpis
+                      mattis in. Maecenas tempor elementum lorem vel ultricies. Nam tempus laoreet eros, et viverra
+                      libero tincidunt a. Nunc vel nisi vulputate, sodales massa eu, varius erat.
+                    owner_id: 2
+                    created_at: 2012/12/02
+                    updated_at: 2014/12/02
+                  - id: 3
+                    name: test house 3
+                    surface: 234
+                    price: 100
+                    picture: https://blog.technavio.org/wp-content/uploads/2018/12/Online-House-Rental-Sites.jpg
+                    description: >-
+                      Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam a lectus eleifend, varius massa ac,
+                      mollis tortor. Quisque ipsum nulla, faucibus ac metus a, eleifend efficitur augue. Integer vel
+                      pulvinar ipsum. Praesent mollis neque sed sagittis ultricies. Suspendisse congue ligula at justo
+                      molestie, eget cursus nulla tincidunt. Pellentesque elementum rhoncus arcu, viverra gravida turpis
+                      mattis in. Maecenas tempor elementum lorem vel ultricies. Nam tempus laoreet eros, et viverra
+                      libero tincidunt a. Nunc vel nisi vulputate, sodales massa eu, varius erat.
+                    owner_id: 1
+                    created_at: 2012/12/02
+                    updated_at: 2014/12/02
+        '401':
+          description: Authentification refusée
+      description: >-
+        Backend : toutes les locations triées par identifiant croissant, sous la forme { rentals: [...] }. Une table
+        vide renvoie { rentals: [] }. picture est une chaîne (ou null si absent dans les données existantes). Aucun
+        chargement du profil propriétaire dans cette réponse : utiliser owner_id et GET /user/{id}.
+  /rentals/{id}:
+    get:
+      operationId: getRental
+      summary: Consulter une location
+      tags:
+        - Locations
+      responses:
+        '200':
+          description: 'Backend : données lues dans MySQL. Les exemples ci-dessous décrivent le mock fourni.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RentalDetail'
+              example:
+                id: 1
+                name: dream house
+                surface: 24
+                price: 30
+                picture:
+                  - https://blog.technavio.org/wp-content/uploads/2018/12/Online-House-Rental-Sites.jpg
+                description: >-
+                  Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam a lectus eleifend, varius massa ac,
+                  mollis tortor. Quisque ipsum nulla, faucibus ac metus a, eleifend efficitur augue. Integer vel
+                  pulvinar ipsum. Praesent mollis neque sed sagittis ultricies. Suspendisse congue ligula at justo
+                  molestie, eget cursus nulla tincidunt. Pellentesque elementum rhoncus arcu, viverra gravida turpis
+                  mattis in. Maecenas tempor elementum lorem vel ultricies. Nam tempus laoreet eros, et viverra libero
+                  tincidunt a. Nunc vel nisi vulputate, sodales massa eu, varius erat.
+                owner_id: 1
+                created_at: 2012/12/02
+                updated_at: 2014/12/02
+        '400':
+          description: 'Backend : identifiant non entier, non positif ou hors plage'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentification refusée
+        '404':
+          description: 'Backend : ressource introuvable'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+          example: 1
+      description: >-
+        Backend : location correspondant à id, ou 404 si absente. picture conserve le tableau du contrat du mock : une
+        URL lorsqu’elle est renseignée en base, sinon un tableau vide. Le mock reste statique quel que soit id.
+  /user/{id}:
+    get:
+      operationId: getUser
+      summary: Consulter un utilisateur
+      tags:
+        - Utilisateurs
+      responses:
+        '200':
+          description: 'Backend : données lues dans MySQL. Les exemples ci-dessous décrivent le mock fourni.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: 2
+                name: Owner Name
+                email: test@test.com
+                created_at: 2022/02/02
+                updated_at: 2022/08/02
+        '400':
+          description: 'Backend : identifiant non entier, non positif ou hors plage'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentification refusée
+        '404':
+          description: 'Backend : ressource introuvable'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+          example: 1
+      description: >-
+        Backend : profil utilisateur correspondant à id, accessible avec un JWT valide, notamment pour afficher le
+        propriétaire d’une location. Renvoie id, name, email et dates, jamais le mot de passe. Retourne 404 si absent.
+        Le mock reste statique.
 components:
   securitySchemes:
     bearerAuth:
@@ -178,6 +346,106 @@ components:
         - id
         - name
         - email
+        - created_at
+        - updated_at
+    RentalsResponse:
+      type: object
+      properties:
+        rentals:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              name:
+                type: string
+                nullable: true
+              surface:
+                type: number
+                nullable: true
+                multipleOf: 0.01
+              price:
+                type: number
+                nullable: true
+                multipleOf: 0.01
+              picture:
+                type: string
+                nullable: true
+              description:
+                type: string
+                nullable: true
+              owner_id:
+                type: integer
+              created_at:
+                type: string
+                nullable: true
+                description: >-
+                  Backend : date ISO 8601 ou null pour une ligne ancienne sans date ; les exemples du mock utilisent
+                  YYYY/MM/DD.
+              updated_at:
+                type: string
+                nullable: true
+                description: >-
+                  Backend : date ISO 8601 ou null pour une ligne ancienne sans date ; les exemples du mock utilisent
+                  YYYY/MM/DD.
+            required:
+              - id
+              - name
+              - surface
+              - price
+              - picture
+              - description
+              - owner_id
+              - created_at
+              - updated_at
+      required:
+        - rentals
+    RentalDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        surface:
+          type: number
+          nullable: true
+          multipleOf: 0.01
+        price:
+          type: number
+          nullable: true
+          multipleOf: 0.01
+        picture:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+          nullable: true
+        owner_id:
+          type: integer
+        created_at:
+          type: string
+          nullable: true
+          description: >-
+            Backend : date ISO 8601 ou null pour une ligne ancienne sans date ; les exemples du mock utilisent
+            YYYY/MM/DD.
+        updated_at:
+          type: string
+          nullable: true
+          description: >-
+            Backend : date ISO 8601 ou null pour une ligne ancienne sans date ; les exemples du mock utilisent
+            YYYY/MM/DD.
+      required:
+        - id
+        - name
+        - surface
+        - price
+        - picture
+        - description
+        - owner_id
         - created_at
         - updated_at
     ErrorResponse:
