@@ -109,8 +109,8 @@ class BackendApplicationTests {
         var profile = get("/api/auth/me", token);
         assertEquals(200, profile.statusCode());
         JsonNode body = json.readTree(profile.body());
-        assertEquals(email, body.get("email").asText());
-        assertEquals("Test User", body.get("name").asText());
+        assertEquals(email, body.get("email").asString());
+        assertEquals("Test User", body.get("name").asString());
         assertTrue(body.has("created_at"));
         assertTrue(body.has("updated_at"));
         assertFalse(body.has("password"));
@@ -253,8 +253,8 @@ class BackendApplicationTests {
             assertEquals(2, items.size());
             assertEquals(first.getId().intValue(), items.get(0).get("id").asInt());
             assertEquals(second.getId().intValue(), items.get(1).get("id").asInt());
-            assertEquals("First house", items.get(0).get("name").asText());
-            assertEquals("https://example.test/house.jpg", items.get(0).get("picture").asText());
+            assertEquals("First house", items.get(0).get("name").asString());
+            assertEquals("https://example.test/house.jpg", items.get(0).get("picture").asString());
             assertEquals(owner.getId().intValue(), items.get(0).get("owner_id").asInt());
             assertFalse(items.get(0).has("owner"));
             assertFalse(response.body().contains("password"));
@@ -262,13 +262,13 @@ class BackendApplicationTests {
             var detail = get("/api/rentals/" + first.getId(), jwt);
             assertEquals(200, detail.statusCode());
             JsonNode body = json.readTree(detail.body());
-            assertEquals("First house", body.get("name").asText());
+            assertEquals("First house", body.get("name").asString());
             assertEquals(120, body.get("surface").asInt());
             assertEquals(300, body.get("price").asInt());
-            assertEquals("First description", body.get("description").asText());
+            assertEquals("First description", body.get("description").asString());
             assertTrue(body.get("picture").isArray());
             assertEquals(1, body.get("picture").size());
-            assertEquals("https://example.test/house.jpg", body.get("picture").get(0).asText());
+            assertEquals("https://example.test/house.jpg", body.get("picture").get(0).asString());
             assertEquals(owner.getId().intValue(), body.get("owner_id").asInt());
             assertFalse(body.get("created_at").isNull());
             assertFalse(body.get("updated_at").isNull());
@@ -286,8 +286,8 @@ class BackendApplicationTests {
         assertEquals(200, response.statusCode());
         JsonNode body = json.readTree(response.body());
         assertEquals(owner.getId().intValue(), body.get("id").asInt());
-        assertEquals("Public Owner", body.get("name").asText());
-        assertEquals(owner.getEmail(), body.get("email").asText());
+        assertEquals("Public Owner", body.get("name").asString());
+        assertEquals(owner.getEmail(), body.get("email").asString());
         assertTrue(body.has("created_at"));
         assertTrue(body.has("updated_at"));
         assertFalse(body.has("password"));
@@ -330,7 +330,7 @@ class BackendApplicationTests {
         fields.put("owner_id", "2147483647");
         var created = multipart("POST", "/api/rentals", fields, png(), "../../unsafe.html", "image/png", jwt);
         assertEquals(200, created.statusCode());
-        assertEquals("Rental created !", json.readTree(created.body()).get("message").asText());
+        assertEquals("Rental created !", json.readTree(created.body()).get("message").asString());
         Rental rental = rentals.findAll().getFirst();
         try {
             assertEquals(ownerId, rental.getOwnerId());
@@ -510,7 +510,7 @@ class BackendApplicationTests {
     }
 
     private String token(HttpResponse<String> response) {
-        return json.readTree(response.body()).get("token").asText();
+        return json.readTree(response.body()).get("token").asString();
     }
 
     private HttpResponse<String> post(String path, Map<String, String> body) throws Exception {
