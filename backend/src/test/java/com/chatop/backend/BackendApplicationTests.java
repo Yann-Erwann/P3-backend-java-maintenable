@@ -475,6 +475,43 @@ class BackendApplicationTests {
     }
 
     @Test
+    void imagesAllowPublicReadsFromConfiguredOrigins() throws Exception {
+        String filename = images.store(new MockMultipartFile("picture", "image.png", "image/png", png()));
+        try {
+            for (String origin : java.util.List.of("http://localhost:8081", "http://127.0.0.1:8081",
+                    "http://localhost:4200", "http://127.0.0.1:4200")) {
+                var response = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/images/" + filename))
+                        .header("Origin", origin).GET().build(), HttpResponse.BodyHandlers.ofByteArray());
+                assertEquals(200, response.statusCode());
+                assertEquals(origin, response.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
+                assertEquals("image/png", response.headers().firstValue("Content-Type").orElseThrow());
+                assertNotNull(ImageIO.read(new java.io.ByteArrayInputStream(response.body())));
+            }
+            var head = client.send(HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + "/images/" + filename))
+                    .header("Origin", "http://localhost:8081").method("HEAD", HttpRequest.BodyPublishers.noBody()).build(),
+                    HttpResponse.BodyHandlers.ofByteArray());
+            assertEquals(200, head.statusCode());
+            assertEquals(0, head.body().length);
+            assertEquals("http://localhost:8081", head.headers().firstValue("Access-Control-Allow-Origin").orElseThrow());
+        } finally {
+            images.delete(filename);
+        }
+    }
+
+    @Test
+    void imagesRejectOtherOriginsAndWritePreflights() throws Exception {
+        var uri = URI.create("http://127.0.0.1:" + port + "/images/00000000-0000-0000-0000-000000000000.png");
+        var denied = client.send(HttpRequest.newBuilder(uri).header("Origin", "https://untrusted.example")
+                .GET().build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(403, denied.statusCode());
+        assertTrue(denied.headers().firstValue("Access-Control-Allow-Origin").isEmpty());
+        var write = client.send(HttpRequest.newBuilder(uri).header("Origin", "http://localhost:8081")
+                .header("Access-Control-Request-Method", "PUT")
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(403, write.statusCode());
+    }
+
+    @Test
     void writeRoutesCannotBeUsedWithoutAuthentication() throws Exception {
         assertEquals(401, multipart("POST", "/api/rentals", rentalFields("House", "10", "20"), png(), "image.png", "image/png", null).statusCode());
         assertEquals(401, multipart("PUT", "/api/rentals/1", rentalFields("House", "10", "20"), null, null, null, null).statusCode());

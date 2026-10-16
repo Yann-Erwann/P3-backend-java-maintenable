@@ -63,6 +63,11 @@ public class SecurityConfig {
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/api/**", configuration);
+        CorsConfiguration imageConfiguration = new CorsConfiguration();
+        imageConfiguration.setAllowedOrigins(origins);
+        imageConfiguration.setAllowedMethods(List.of("GET", "HEAD", "OPTIONS"));
+        imageConfiguration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        source.registerCorsConfiguration("/images/**", imageConfiguration);
         return source;
     }
 
@@ -76,6 +81,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/images/**").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/images/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/swagger-ui.html", "/swagger-ui/**",
                                 "/v3/api-docs", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated())
