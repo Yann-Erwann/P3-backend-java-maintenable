@@ -38,6 +38,7 @@ import com.chatop.backend.repository.UserRepository;
 import com.chatop.backend.repository.RentalRepository;
 import com.chatop.backend.entity.Rental;
 import com.chatop.backend.entity.User;
+import com.chatop.backend.repository.MessageRepository;
 import com.chatop.backend.service.ImageStorageService;
 import com.chatop.backend.service.RentalService;
 import com.chatop.backend.dto.RentalWriteRequest;
@@ -59,6 +60,8 @@ class BackendApplicationTests {
     UserRepository users;
     @Autowired
     RentalRepository rentals;
+    @Autowired
+    MessageRepository messages;
     @Autowired
     ImageStorageService images;
     @Autowired
@@ -412,6 +415,39 @@ class BackendApplicationTests {
                 new RentalWriteRequest("x".repeat(256), BigDecimal.ONE, BigDecimal.ONE, "Description"),
                 file, decoder.decode(jwt).getSubject()));
         try (var paths = Files.list(UPLOADS)) { assertEquals(before, paths.count()); }
+    }
+
+    @Test
+    void messagesArePersistedWithTheAuthenticatedAuthorAndRejectImpersonation() throws Exception {
+        String ownerJwt = token(register(email()));
+        int ownerId = Integer.parseInt(decoder.decode(ownerJwt).getSubject());
+        Rental rental = rentals.saveAndFlush(new Rental("Message house", BigDecimal.ONE, BigDecimal.TEN,
+                "https://example.test/image.png", "Description", ownerId));
+        try {
+            String senderJwt = token(register(email()));
+            String senderId = decoder.decode(senderJwt).getSubject();
+            var response = post("/api/messages", Map.of("rental_id", rental.getId().toString(),
+                    "user_id", senderId, "message", "  Is the house available?  "), senderJwt);
+            assertEquals(200, response.statusCode());
+            var stored = messages.findAll().getFirst();
+            assertEquals(Integer.valueOf(senderId), stored.getUserId());
+            assertEquals(rental.getId(), stored.getRentalId());
+            assertEquals("Is the house available?", stored.getMessage());
+            assertNotNull(stored.getCreatedAt());
+            long count = messages.count();
+            assertEquals(403, post("/api/messages", Map.of("rental_id", rental.getId().toString(),
+                    "user_id", Integer.toString(ownerId), "message", "Impersonation"), senderJwt).statusCode());
+            assertEquals(404, post("/api/messages", Map.of("rental_id", "2147483647",
+                    "user_id", senderId, "message", "Missing rental"), senderJwt).statusCode());
+            for (String content : java.util.List.of(" ", "x".repeat(2001))) {
+                assertEquals(400, post("/api/messages", Map.of("rental_id", rental.getId().toString(),
+                        "user_id", senderId, "message", content), senderJwt).statusCode());
+            }
+            assertEquals(count, messages.count());
+        } finally {
+            messages.deleteAll();
+            rentals.deleteById(rental.getId());
+        }
     }
 
     @Test

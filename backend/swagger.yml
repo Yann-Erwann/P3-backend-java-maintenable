@@ -2,10 +2,13 @@ openapi: 3.0.3
 info:
   title: ChaTop
   version: 1.0.0
-  description: API ChaTop avec authentification JWT.
+  description: >-
+    Les neuf opérations métier sont implémentées dans le backend Spring Boot avec MySQL et JWT : authentification,
+    profils, locations et messages. Les images sont des ressources statiques PNG disponibles sous /images/{filename}.
+    Mockoon reste un serveur distinct aux réponses statiques avec son jeton fictif jwt.
 servers:
   - url: http://localhost:8080/api
-    description: Backend Spring Boot (routes disponibles à cette étape)
+    description: Backend Spring Boot (toutes les routes métier implémentées)
   - url: http://localhost:3001/api
     description: Mockoon (réponses statiques)
 security:
@@ -83,6 +86,51 @@ paths:
         Backend : email et mot de passe obligatoires ; mauvais identifiants et utilisateur inconnu renvoient la même
         erreur 401. Aucun compte de démonstration n’est créé automatiquement. Le mock utilise test@test.com / test!31 ;
         sa règle d’erreur teste login au lieu de email.
+  /messages:
+    post:
+      operationId: sendMessage
+      summary: Envoyer un message
+      tags:
+        - Messages
+      responses:
+        '200':
+          description: 'Backend : écriture persistée dans MySQL ; même message de succès que le mock fourni.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Message send with success
+        '400':
+          description: Champs manquants, invalides ou contenu de fichier non accepté
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentification refusée
+        '403':
+          description: user_id ne correspond pas à l’utilisateur authentifié
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Location introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+      description: >-
+        Création JSON d’un message associé à une location existante. rental_id, user_id et message sont obligatoires.
+        L’auteur est déterminé par le JWT ; un user_id différent est refusé avec 403. Le texte non vide est limité à
+        2000 caractères et enregistré dans MESSAGES. Cette route enregistre le message ; elle n’envoie pas d’email.
   /auth/me:
     get:
       operationId: getCurrentUser
@@ -445,6 +493,26 @@ components:
         - name
         - email
         - password
+    MessageRequest:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          example: 1
+          minimum: 1
+        rental_id:
+          type: integer
+          example: 1
+          minimum: 1
+        message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          example: Bonjour, cette location est-elle disponible ?
+      required:
+        - user_id
+        - rental_id
+        - message
     RentalUpdateRequest:
       type: object
       properties:

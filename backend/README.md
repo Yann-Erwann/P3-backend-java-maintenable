@@ -1,7 +1,5 @@
 # Backend ChaTop
 
-À cette étape, Docker prépare l’environnement ; les fonctionnalités backend décrites ci-dessous sont livrées progressivement par les commits suivants.
-
 Le [README à la racine](../README.md) décrit le démarrage complet avec Docker,
 MySQL, Mockoon et Swagger UI, les tests de l'API, les transferts de ports Remote
 SSH, le redémarrage automatique et le dépannage.
