@@ -328,6 +328,10 @@ Une erreur de compilation ou un échec de test fait échouer le job **Maven
 verification**. Les tests H2 sont suivis des tests JPA avec MySQL 8.4 dans
 Testcontainers ; le runner GitHub fournit Docker.
 
+Après une exécution réussie, ouvrir **Actions > Backend CI**, sélectionner
+l’exécution et télécharger **backend-jar** dans **Artifacts**. Le JAR est
+conservé sept jours et peut être joint manuellement à une release GitHub.
+
 ## Construire le JAR et publier une release
 
 Le workflow [Backend JAR](../.github/workflows/backend-release.yml) installe
