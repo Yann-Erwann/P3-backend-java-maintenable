@@ -188,6 +188,63 @@ projet. Le compte applicatif doit disposer des droits sur la base sélectionnée
 Le nom renseigné dans `MYSQL_DATABASE` doit être le même. Ne pas réexécuter le
 script sur une base contenant déjà ces tables : les `CREATE TABLE` échoueraient.
 
+### Aligner une ancienne base sans effacer les données
+
+Le schéma de référence est `schema.sql`. Une base initialisée avec l’ancien SQL
+peut encore accepter `NULL` dans des champs obligatoires des tables `USERS` et
+`MESSAGES`. La création du schéma n’est pas rejouée sur un volume existant.
+
+Avant toute modification, arrêter les écritures applicatives et sauvegarder la
+base. Depuis la racine, avec Bash et le backend arrêté pendant l’intervention :
+
+```bash
+sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml stop backend
+mkdir -p backend/backups
+umask 077
+sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec -T mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysqldump --single-transaction --no-tablespaces --set-gtid-purged=OFF -u "$MYSQL_USER" --databases "$MYSQL_DATABASE"' > backend/backups/before-constraints.sql
+sudo docker compose --project-directory . --env-file backend/.env -f docker/compose.yaml exec mysql sh -c 'MYSQL_PWD="$MYSQL_PASSWORD" exec mysql -u "$MYSQL_USER" "$MYSQL_DATABASE"'
+```
+
+Vérifier que la sauvegarde est non vide avant de continuer. `backend/backups/`
+est ignoré par Git ; ses fichiers contiennent les données de la base.
+Dans le client MySQL, ces deux compteurs doivent être à zéro :
+
+```sql
+SELECT COUNT(*) AS incomplete_users FROM USERS
+WHERE email IS NULL OR name IS NULL OR password IS NULL
+   OR created_at IS NULL OR updated_at IS NULL;
+SELECT COUNT(*) AS incomplete_messages FROM MESSAGES
+WHERE rental_id IS NULL OR user_id IS NULL OR message IS NULL OR created_at IS NULL;
+```
+
+Si un compteur est non nul, corriger les lignes avec des valeurs justifiées avant
+de poursuivre ; ne pas supprimer ni inventer des données pour passer le contrôle.
+Sinon, appliquer les mêmes contraintes que pour une nouvelle installation :
+
+```sql
+ALTER TABLE `USERS`
+  MODIFY `email` VARCHAR(255) NOT NULL,
+  MODIFY `name` VARCHAR(255) NOT NULL,
+  MODIFY `password` VARCHAR(255) NOT NULL,
+  MODIFY `created_at` TIMESTAMP NOT NULL,
+  MODIFY `updated_at` TIMESTAMP NOT NULL;
+
+ALTER TABLE `MESSAGES`
+  MODIFY `rental_id` INT NOT NULL,
+  MODIFY `user_id` INT NOT NULL,
+  MODIFY `message` VARCHAR(2000) NOT NULL,
+  MODIFY `created_at` TIMESTAMP NOT NULL;
+
+SHOW CREATE TABLE USERS;
+SHOW CREATE TABLE RENTALS;
+SHOW CREATE TABLE MESSAGES;
+```
+
+Ces deux `ALTER TABLE` ne suppriment ni les lignes ni les clés étrangères.
+MySQL valide chaque DDL séparément : ne pas compter sur `ROLLBACK` pour les annuler.
+Comparer les définitions avec le schéma de référence, puis quitter le client et
+relancer le backend avec la commande Compose `start backend`.
+
 ### Vérifier le SQL sur MySQL
 
 Le test `MySqlSchemaTests` vérifie le script, les clés et les décimales dans deux
